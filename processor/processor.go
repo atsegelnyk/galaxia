@@ -108,9 +108,11 @@ func (p *GalaxiaProcessor) Start(ctx context.Context) {
 
 func (p *GalaxiaProcessor) processUpdate(update *tgbotapi.Update) error {
 	if update.Message != nil {
-		err := p.auther.Authorize(update.Message.Chat.ID)
-		if err != nil {
-			return err
+		if p.auther != nil {
+			err := p.auther.Authorize(update.Message.Chat.ID)
+			if err != nil {
+				return err
+			}
 		}
 
 		ses := p.sessionMan.GetForUserID(update.Message.Chat.ID)
