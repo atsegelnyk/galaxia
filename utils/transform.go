@@ -5,6 +5,22 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
+func TransformPhoto(userID int64, photo []byte) tgbotapi.PhotoConfig {
+	photoFileBytes := tgbotapi.FileBytes{
+		Name:  "pic",
+		Bytes: photo,
+	}
+	return tgbotapi.NewPhotoUpload(userID, photoFileBytes)
+}
+
+func TransformVideo(userID int64, video []byte) tgbotapi.VideoConfig {
+	photoFileBytes := tgbotapi.FileBytes{
+		Name:  "vid",
+		Bytes: video,
+	}
+	return tgbotapi.NewVideoUpload(userID, photoFileBytes)
+}
+
 func TransformMessage(userID int64, model *model2.Message) *tgbotapi.MessageConfig {
 	messageConfig := tgbotapi.NewMessage(userID, model.Text)
 	if model.InlineKeyboard != nil {

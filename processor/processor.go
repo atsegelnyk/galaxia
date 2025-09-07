@@ -229,6 +229,14 @@ func (p *GalaxiaProcessor) respondMessages(responser model2.Responser) error {
 	messages := responser.GetMessages()
 
 	for _, msg := range messages {
+		if msg.Photo != nil {
+			photoConfig := utils.TransformPhoto(userID, msg.Photo)
+			chattables = append(chattables, photoConfig)
+		}
+		if msg.Video != nil {
+			videoConfig := utils.TransformVideo(userID, msg.Video)
+			chattables = append(chattables, videoConfig)
+		}
 		mcgConfig := utils.TransformMessage(userID, msg)
 		chattables = append(chattables, mcgConfig)
 	}

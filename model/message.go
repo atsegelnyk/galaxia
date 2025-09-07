@@ -2,7 +2,8 @@ package model
 
 type Message struct {
 	Text  string
-	Media []*Media
+	Photo []byte
+	Video []byte
 
 	ReplyKeyboard  [][]*ReplyButton
 	InlineKeyboard [][]*InlineButton
@@ -19,8 +20,6 @@ func NewMessage(opts ...MessageOption) *Message {
 }
 
 type Media struct {
-	Photos []byte
-	Videos []byte
 }
 
 func WithText(text string) MessageOption {
@@ -38,5 +37,18 @@ func WithReplyKeyboard(keyboard [][]*ReplyButton) MessageOption {
 func WithInlineKeyboard(keyboard [][]*InlineButton) MessageOption {
 	return func(msg *Message) {
 		msg.InlineKeyboard = keyboard
+	}
+}
+
+func WithPhoto(photo []byte) MessageOption {
+	return func(msg *Message) {
+		msg.Photo = photo
+	}
+
+}
+
+func WithVideo(video []byte) MessageOption {
+	return func(msg *Message) {
+		msg.Video = video
 	}
 }
