@@ -2,11 +2,11 @@ package processor
 
 import (
 	"context"
-	"galaxia/auth"
-	"galaxia/entityregistry"
-	model2 "galaxia/model"
-	"galaxia/session"
-	"galaxia/utils"
+	"github.com/atsegelnyk/galaxia/auth"
+	"github.com/atsegelnyk/galaxia/entityregistry"
+	model2 "github.com/atsegelnyk/galaxia/model"
+	"github.com/atsegelnyk/galaxia/session"
+	"github.com/atsegelnyk/galaxia/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 )

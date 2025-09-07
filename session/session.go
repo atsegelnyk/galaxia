@@ -1,7 +1,7 @@
 package session
 
 import (
-	"galaxia/model"
+	"github.com/atsegelnyk/galaxia/model"
 	"sync"
 )
 

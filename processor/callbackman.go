@@ -2,7 +2,7 @@ package processor
 
 import (
 	"errors"
-	"galaxia/model"
+	"github.com/atsegelnyk/galaxia/model"
 	"sync"
 )
 

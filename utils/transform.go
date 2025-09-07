@@ -1,7 +1,7 @@
 package utils
 
 import (
-	model2 "galaxia/model"
+	"github.com/atsegelnyk/galaxia/model"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
@@ -15,13 +15,13 @@ func TransformPhoto(userID int64, photo []byte) tgbotapi.PhotoConfig {
 
 func TransformVideo(userID int64, video []byte) tgbotapi.VideoConfig {
 	photoFileBytes := tgbotapi.FileBytes{
-		Name:  "vid",
+		Name:  "myvid",
 		Bytes: video,
 	}
 	return tgbotapi.NewVideoUpload(userID, photoFileBytes)
 }
 
-func TransformMessage(userID int64, model *model2.Message) *tgbotapi.MessageConfig {
+func TransformMessage(userID int64, model *model.Message) *tgbotapi.MessageConfig {
 	messageConfig := tgbotapi.NewMessage(userID, model.Text)
 	if model.InlineKeyboard != nil {
 		keyboard := tgbotapi.NewInlineKeyboardMarkup()
@@ -52,7 +52,7 @@ func TransformMessage(userID int64, model *model2.Message) *tgbotapi.MessageConf
 	return &messageConfig
 }
 
-func TransformCallbackQueryResponse(model *model2.CallbackQueryResponse) tgbotapi.CallbackConfig {
+func TransformCallbackQueryResponse(model *model.CallbackQueryResponse) tgbotapi.CallbackConfig {
 	return tgbotapi.CallbackConfig{
 		Text:            model.Text,
 		CallbackQueryID: model.CallbackQueryID,

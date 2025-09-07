@@ -2,7 +2,7 @@ package entityregistry
 
 import (
 	"fmt"
-	"galaxia/model"
+	"github.com/atsegelnyk/galaxia/model"
 	"sync"
 )
 

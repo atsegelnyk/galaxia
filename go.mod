@@ -1,4 +1,4 @@
-module galaxia
+module github.com/atsegelnyk/galaxia
 
 go 1.24
 
