@@ -146,14 +146,14 @@ func (p *GalaxiaProcessor) processCmd(session *session.Session, update *tgbotapi
 }
 
 func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbotapi.Update) error {
-	stageName := session.GetCurrentStage()
-	if stageName == "" {
+	stageRef := session.GetCurrentStage()
+	if stageRef.Empty() {
 		cmd := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
 		response := cmd.Handler()(update)
 		return p.handleUserResponse(session, response)
 	}
 
-	stg := p.entityRegistry.GetStage(update.Message.Chat.ID, stageName)
+	stg := p.entityRegistry.GetStage(update.Message.Chat.ID, stageRef)
 	responser, err := stg.ProcessUserEvent(update)
 	if err != nil {
 		log.Println(err)
