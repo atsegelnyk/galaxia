@@ -1,52 +1,57 @@
 package session
 
 import (
+	"encoding/json"
+	"errors"
 	"github.com/atsegelnyk/galaxia/model"
-	"sync"
 )
 
+const DefaultSessionTTL = 86400
+
 type Session struct {
-	userID   int64
-	stageRef *model.Stage
+	TTL              int64                        `json:"ttl"`
+	UserID           int64                        `json:"user_id"`
+	CurrentStage     model.ResourceRef            `json:"current_stage"`
+	PendingCallbacks map[string]model.ResourceRef `json:"pending_callbacks"`
+
+	Misc map[string]string `json:"misc"`
 }
 
 func NewSession(userID int64) *Session {
 	return &Session{
-		userID: userID,
+		UserID:           userID,
+		TTL:              DefaultSessionTTL,
+		PendingCallbacks: make(map[string]model.ResourceRef),
 	}
 }
 
 func (s *Session) GetUserID() int64 {
-	return s.userID
+	return s.UserID
 }
 
-func (s *Session) GetCurrentStage() *model.Stage {
-	return s.stageRef
+func (s *Session) GetCurrentStage() model.ResourceRef {
+	return s.CurrentStage
 }
 
-func (s *Session) SetStage(stageRef *model.Stage) {
-	s.stageRef = stageRef
+func (s *Session) SetStage(nextStageRef model.ResourceRef) {
+	s.CurrentStage = nextStageRef
 }
 
-type Manager struct {
-	mu       sync.Mutex
-	sessions map[int64]*Session
+func (s *Session) RegisterCallback(id string, handlerRef model.ResourceRef) {
+	s.PendingCallbacks[id] = handlerRef
 }
 
-func NewManager() *Manager {
-	return &Manager{
-		mu:       sync.Mutex{},
-		sessions: make(map[int64]*Session),
+func (s *Session) GetPendingCallback(callbackID string) (model.ResourceRef, error) {
+	if cb, ok := s.PendingCallbacks[callbackID]; ok {
+		return cb, nil
 	}
+	return "", errors.New("callback not found")
 }
 
-func (m *Manager) GetForUserID(userID int64) *Session {
-	if session, ok := m.sessions[userID]; ok {
-		return session
-	}
-	session := NewSession(userID)
-	m.mu.Lock()
-	m.sessions[userID] = session
-	m.mu.Unlock()
-	return session
+func (s *Session) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+func (s *Session) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, s)
 }

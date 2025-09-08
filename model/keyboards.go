@@ -14,7 +14,7 @@ type KeyboardLayout int
 
 type ReplyButton struct {
 	Text   string
-	Action UserAction
+	Action UserActionFunc
 }
 
 func NewReplyButton(name string) *ReplyButton {
@@ -58,37 +58,25 @@ func NewReplyKeyboard(layout KeyboardLayout, buttons ...*ReplyButton) [][]*Reply
 	return keyboard
 }
 
-func (b *ReplyButton) LinkAction(action UserAction) *ReplyButton {
+func (b *ReplyButton) LinkAction(action UserActionFunc) *ReplyButton {
 	b.Action = action
 	return b
 }
 
 type InlineButton struct {
-	Text    string
-	Data    string
-	Context *CallbackContext
+	Text               string
+	Data               string
+	CallbackHandlerRef ResourceRef
 }
 
-type CallbackContext struct {
-	Retain   bool
-	Callback UserCallback
-	Misc     interface{}
-}
-
-func NewInlineButton(name string, context *CallbackContext) *InlineButton {
+func NewInlineButton(name string) *InlineButton {
 	return &InlineButton{
-		Text:    name,
-		Context: context,
+		Text: name,
 	}
 }
 
-func (b *InlineButton) LinkAction(action UserCallback) *InlineButton {
-	b.Context.Callback = action
-	return b
-}
-
-func (b *InlineButton) AddMisc(misc interface{}) *InlineButton {
-	b.Context.Misc = misc
+func (b *InlineButton) LinkCallbackHandler(handlerRef Referencer) *InlineButton {
+	b.CallbackHandlerRef = handlerRef.SelfRef()
 	return b
 }
 

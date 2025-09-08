@@ -26,7 +26,7 @@ func NewUserResponse(userID int64, options ...UserResponseOption) *UserResponse 
 	return response
 }
 
-func WithTransitTarget(targetStageRef string) UserResponseOption {
+func WithTransitTarget(targetStageRef ResourceRef) UserResponseOption {
 	return func(response *UserResponse) {
 		response.Transit = &Transit{
 			TargetRef: targetStageRef,
@@ -52,7 +52,7 @@ type CallbackQueryResponse struct {
 }
 
 type Transit struct {
-	TargetRef string
+	TargetRef ResourceRef
 }
 
 func (u *UserResponse) GetUserID() int64 {

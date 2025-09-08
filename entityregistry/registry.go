@@ -9,43 +9,56 @@ import (
 type Registry struct {
 	mu sync.Mutex
 
-	cmds   map[string]*model.Command
-	stages map[string]*model.Stage
+	cmds             map[model.ResourceRef]*model.Command
+	stages           map[model.ResourceRef]*model.Stage
+	callbackHandlers map[model.ResourceRef]*model.CallbackHandler
 
 	overrides map[int64]userOverrides
 }
 
 type userOverrides struct {
-	cmds   map[string]*model.Command
-	stages map[string]*model.Stage
+	cmds             map[model.ResourceRef]*model.Command
+	stages           map[model.ResourceRef]*model.Stage
+	callbackHandlers map[model.ResourceRef]*model.CallbackHandler
 }
 
 func New() *Registry {
 	entityRegistry := &Registry{
-		mu:        sync.Mutex{},
-		cmds:      make(map[string]*model.Command),
-		stages:    make(map[string]*model.Stage),
-		overrides: make(map[int64]userOverrides),
+		mu:               sync.Mutex{},
+		cmds:             make(map[model.ResourceRef]*model.Command),
+		stages:           make(map[model.ResourceRef]*model.Stage),
+		callbackHandlers: make(map[model.ResourceRef]*model.CallbackHandler),
+		overrides:        make(map[int64]userOverrides),
 	}
 	return entityRegistry
 }
 
 func (e *Registry) RegisterCommand(cmd *model.Command) error {
-	if _, ok := e.cmds[cmd.Name()]; ok {
-		return fmt.Errorf("command %s already exists", cmd.Name())
+	if _, ok := e.cmds[cmd.SelfRef()]; ok {
+		return fmt.Errorf("command %s already exists", cmd.SelfRef())
 	}
 	e.mu.Lock()
-	e.cmds[cmd.Name()] = cmd
+	e.cmds[cmd.SelfRef()] = cmd
 	e.mu.Unlock()
 	return nil
 }
 
 func (e *Registry) RegisterStage(stg *model.Stage) error {
-	if _, ok := e.stages[stg.Name()]; ok {
-		return fmt.Errorf("stage %s already exists", stg.Name())
+	if _, ok := e.stages[stg.SelfRef()]; ok {
+		return fmt.Errorf("stage %s already exists", stg.SelfRef())
 	}
 	e.mu.Lock()
-	e.stages[stg.Name()] = stg
+	e.stages[stg.SelfRef()] = stg
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *Registry) RegisterCallbackHandler(handler *model.CallbackHandler) error {
+	if _, ok := e.callbackHandlers[handler.SelfRef()]; ok {
+		return fmt.Errorf("callback handler %s already exists", handler.SelfRef())
+	}
+	e.mu.Lock()
+	e.callbackHandlers[handler.SelfRef()] = handler
 	e.mu.Unlock()
 	return nil
 }
@@ -53,63 +66,79 @@ func (e *Registry) RegisterStage(stg *model.Stage) error {
 func (e *Registry) OverrideCommand(cmd *model.Command, users ...int64) {
 	if len(users) == 0 {
 		e.mu.Lock()
-		e.cmds[cmd.Name()] = cmd
+		e.cmds[cmd.SelfRef()] = cmd
 		e.mu.Unlock()
 		return
 	}
 
 	for _, user := range users {
-		if _, ok := e.overrides[user]; !ok {
-			uo := userOverrides{
-				cmds:   make(map[string]*model.Command),
-				stages: make(map[string]*model.Stage),
-			}
-			uo.cmds[cmd.Name()] = cmd
-			e.mu.Lock()
-			e.overrides[user] = uo
-			e.mu.Unlock()
-			continue
-		}
+		e.checkInitUserOverrides(user)
 		uo := e.overrides[user]
-		uo.cmds[cmd.Name()] = cmd
+		uo.cmds[cmd.SelfRef()] = cmd
 	}
 }
 
 func (e *Registry) OverrideStage(stg *model.Stage, users ...int64) {
 	if len(users) == 0 {
 		e.mu.Lock()
-		e.stages[stg.Name()] = stg
+		e.stages[stg.SelfRef()] = stg
 		e.mu.Unlock()
 		return
 	}
 
 	for _, user := range users {
-		if _, ok := e.overrides[user]; !ok {
-			uo := userOverrides{
-				cmds:   make(map[string]*model.Command),
-				stages: make(map[string]*model.Stage),
-			}
-			uo.stages[stg.Name()] = stg
-			e.mu.Lock()
-			e.overrides[user] = uo
-			e.mu.Unlock()
-			continue
-		}
+		e.checkInitUserOverrides(user)
 		uo := e.overrides[user]
-		uo.stages[stg.Name()] = stg
+		uo.stages[stg.SelfRef()] = stg
 	}
 }
 
-func (e *Registry) GetCommand(userID int64, name string) *model.Command {
-	if override, ok := e.overrides[userID]; ok {
-		return override.cmds[name]
+func (e *Registry) OverrideCallbackHandler(handler *model.CallbackHandler, users ...int64) {
+	if len(users) == 0 {
+		e.mu.Lock()
+		e.callbackHandlers[handler.SelfRef()] = handler
+		e.mu.Unlock()
+		return
 	}
-	return e.cmds[name]
+
+	for _, user := range users {
+		e.checkInitUserOverrides(user)
+		uo := e.overrides[user]
+		uo.callbackHandlers[handler.SelfRef()] = handler
+	}
 }
 
-func (e *Registry) GetStage(userID int64, name string) *model.Stage {
+func (e *Registry) GetCommand(userID int64, cmdRef model.ResourceRef) *model.Command {
 	if override, ok := e.overrides[userID]; ok {
-		return override.stages[name]
+		return override.cmds[cmdRef]
 	}
-	return e.stages[name]
+	return e.cmds[cmdRef]
+}
+
+func (e *Registry) GetStage(userID int64, stageRef model.ResourceRef) *model.Stage {
+	if override, ok := e.overrides[userID]; ok {
+		return override.stages[stageRef]
+	}
+	return e.stages[stageRef]
+}
+
+func (e *Registry) GetCallbackHandler(userID int64, callbackRef model.ResourceRef) *model.CallbackHandler {
+	if override, ok := e.overrides[userID]; ok {
+		return override.callbackHandlers[callbackRef]
+	}
+	return e.callbackHandlers[callbackRef]
+}
+
+func (e *Registry) checkInitUserOverrides(userID int64) {
+	if _, ok := e.overrides[userID]; ok {
+		return
+	}
+	uo := userOverrides{
+		cmds:             make(map[model.ResourceRef]*model.Command),
+		stages:           make(map[model.ResourceRef]*model.Stage),
+		callbackHandlers: make(map[model.ResourceRef]*model.CallbackHandler),
+	}
+	e.mu.Lock()
+	e.overrides[userID] = uo
+	e.mu.Unlock()
 }

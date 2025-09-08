@@ -7,12 +7,16 @@ import (
 
 var UnsupportedInputError = errors.New("unsupported input")
 
+type InputHandlerFunc func(update *tgbotapi.Update) Responser
+
+type UserActionFunc func(update *tgbotapi.Update) Responser
+
 type Stage struct {
 	name         string
 	inputAllowed bool
 
 	initializer  StageInitializer
-	inputHandler InputHandler
+	inputHandler InputHandlerFunc
 }
 
 type StageOption func(*Stage)
@@ -33,15 +37,15 @@ func WithInitializer(initializer StageInitializer) StageOption {
 	}
 }
 
-func WithInputHandler(handler InputHandler) StageOption {
+func WithInputHandler(handler InputHandlerFunc) StageOption {
 	return func(stage *Stage) {
 		stage.inputAllowed = true
 		stage.inputHandler = handler
 	}
 }
 
-func (s *Stage) Name() string {
-	return s.name
+func (s *Stage) SelfRef() ResourceRef {
+	return ResourceRef(s.name)
 }
 
 func (s *Stage) Initializer() StageInitializer {

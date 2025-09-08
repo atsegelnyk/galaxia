@@ -2,20 +2,20 @@ package model
 
 type Command struct {
 	name    string
-	handler UserAction
+	handler UserActionFunc
 }
 
-func NewCommand(name string, handler UserAction) *Command {
+func NewCommand(name string, handler UserActionFunc) *Command {
 	return &Command{
 		name:    name,
 		handler: handler,
 	}
 }
 
-func (c *Command) Name() string {
-	return c.name
+func (c *Command) SelfRef() ResourceRef {
+	return ResourceRef(c.name)
 }
 
-func (c *Command) Handler() UserAction {
+func (c *Command) Handler() UserActionFunc {
 	return c.handler
 }
