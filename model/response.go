@@ -1,33 +1,35 @@
 package model
 
-type Responser interface {
+type Updater interface {
 	GetUserID() int64
 	GetTransitConfig() *Transit
 	GetMessages() []*Message
 	GetCallbackResponse() *CallbackQueryResponse
 }
 
-type UserResponseOption func(*UserResponse)
+type UserUpdateOption func(*UserUpdate)
 
-type UserResponse struct {
+type UserUpdate struct {
 	UserID                int64
 	Transit               *Transit
 	Messages              []*Message
 	CallbackQueryResponse *CallbackQueryResponse
 }
 
-func NewUserResponse(userID int64, options ...UserResponseOption) *UserResponse {
-	response := &UserResponse{
+func NewUserResponse(userID int64, options ...UserUpdateOption) *UserUpdate {
+	response := &UserUpdate{
 		UserID: userID,
 	}
 	for _, option := range options {
-		option(response)
+		if option != nil {
+			option(response)
+		}
 	}
 	return response
 }
 
-func WithTransit(targetStageRef ResourceRef, clean bool) UserResponseOption {
-	return func(response *UserResponse) {
+func WithTransit(targetStageRef ResourceRef, clean bool) UserUpdateOption {
+	return func(response *UserUpdate) {
 		response.Transit = &Transit{
 			TargetRef: targetStageRef,
 			Clean:     clean,
@@ -35,14 +37,14 @@ func WithTransit(targetStageRef ResourceRef, clean bool) UserResponseOption {
 	}
 }
 
-func WithMessages(msg ...*Message) UserResponseOption {
-	return func(response *UserResponse) {
+func WithMessages(msg ...*Message) UserUpdateOption {
+	return func(response *UserUpdate) {
 		response.Messages = append(response.Messages, msg...)
 	}
 }
 
-func WithCallbackQueryResponse(callbackQueryResponse *CallbackQueryResponse) UserResponseOption {
-	return func(response *UserResponse) {
+func WithCallbackQueryResponse(callbackQueryResponse *CallbackQueryResponse) UserUpdateOption {
+	return func(response *UserUpdate) {
 		response.CallbackQueryResponse = callbackQueryResponse
 	}
 }
@@ -57,18 +59,18 @@ type Transit struct {
 	TargetRef ResourceRef
 }
 
-func (u *UserResponse) GetUserID() int64 {
+func (u *UserUpdate) GetUserID() int64 {
 	return u.UserID
 }
 
-func (u *UserResponse) GetTransitConfig() *Transit {
+func (u *UserUpdate) GetTransitConfig() *Transit {
 	return u.Transit
 }
 
-func (u *UserResponse) GetMessages() []*Message {
+func (u *UserUpdate) GetMessages() []*Message {
 	return u.Messages
 }
 
-func (u *UserResponse) GetCallbackResponse() *CallbackQueryResponse {
+func (u *UserUpdate) GetCallbackResponse() *CallbackQueryResponse {
 	return u.CallbackQueryResponse
 }

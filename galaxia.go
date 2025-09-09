@@ -1,10 +1,9 @@
-package processor
+package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/atsegelnyk/galaxia/auth"
 	"github.com/atsegelnyk/galaxia/entityregistry"
 	"github.com/atsegelnyk/galaxia/model"
 	"github.com/atsegelnyk/galaxia/session"
@@ -20,7 +19,6 @@ type GalaxiaProcessorOption func(*GalaxiaProcessor)
 type GalaxiaProcessor struct {
 	api *tgbotapi.BotAPI
 
-	auther            auth.Auther
 	sessionRepository session.Repository
 	entityRegistry    *entityregistry.Registry
 }
@@ -38,12 +36,6 @@ func NewGalaxiaProcessor(opts ...GalaxiaProcessorOption) *GalaxiaProcessor {
 func WithApi(api *tgbotapi.BotAPI) GalaxiaProcessorOption {
 	return func(g *GalaxiaProcessor) {
 		g.api = api
-	}
-}
-
-func WithAuthHandler(auther auth.Auther) GalaxiaProcessorOption {
-	return func(g *GalaxiaProcessor) {
-		g.auther = auther
 	}
 }
 
@@ -107,6 +99,14 @@ func (p *GalaxiaProcessor) Start(ctx context.Context) {
 
 }
 
+func (p *GalaxiaProcessor) HandleUserUpdate(userID int64, updater model.Updater) error {
+	ses, err := p.sessionRepository.Get(userID)
+	if err != nil {
+		return err
+	}
+	return p.handleUserUpdate(ses, updater)
+}
+
 func (p *GalaxiaProcessor) preflightCheck() error {
 	_, err := p.entityRegistry.GetCommand(0, StartCMDName)
 	if err != nil {
@@ -135,8 +135,8 @@ func (p *GalaxiaProcessor) initSession(update *tgbotapi.Update) *session.Session
 
 func (p *GalaxiaProcessor) processUpdate(update *tgbotapi.Update) error {
 	if update.Message != nil {
-		if p.auther != nil {
-			err := p.auther.Authorize(update.Message.Chat.ID)
+		if auther := p.entityRegistry.GetAuther(); auther != nil {
+			err := auther.Authorize(update.Message.Chat.ID)
 			if err != nil {
 				return err
 			}
@@ -174,8 +174,8 @@ func (p *GalaxiaProcessor) processCmd(session *session.Session, update *tgbotapi
 	if err != nil {
 		return err
 	}
-	responser := cmd.Handler()(session.UserContext, update)
-	return p.handleUserResponse(session, responser)
+	updater := cmd.Handler()(session.UserContext, update)
+	return p.handleUserUpdate(session, updater)
 }
 
 func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbotapi.Update) error {
@@ -183,18 +183,18 @@ func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbo
 	if stageRef.Empty() {
 		cmd, _ := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
 		response := cmd.Handler()(session.UserContext, update)
-		return p.handleUserResponse(session, response)
+		return p.handleUserUpdate(session, response)
 	}
 
 	stg, err := p.entityRegistry.GetStage(update.Message.Chat.ID, stageRef)
 	if err != nil {
 		return err
 	}
-	responser, err := stg.ProcessUserEvent(session.UserContext, update)
+	updater, err := stg.ProcessUserEvent(session.UserContext, update)
 	if err != nil {
 		log.Println(err)
 	}
-	return p.handleUserResponse(session, responser)
+	return p.handleUserUpdate(session, updater)
 }
 
 func (p *GalaxiaProcessor) processCallbackQuery(session *session.Session, update *tgbotapi.Update) error {
@@ -207,41 +207,41 @@ func (p *GalaxiaProcessor) processCallbackQuery(session *session.Session, update
 	if err != nil {
 		return err
 	}
-	responser := callbackHandler.Func()(session.UserContext, update)
-	return p.handleUserResponse(session, responser)
+	updater := callbackHandler.Func()(session.UserContext, update)
+	return p.handleUserUpdate(session, updater)
 }
 
 // user response handler
 
-func (p *GalaxiaProcessor) handleUserResponse(ses *session.Session, responser model.Responser) error {
-	if responser == nil {
+func (p *GalaxiaProcessor) handleUserUpdate(ses *session.Session, updater model.Updater) error {
+	if updater == nil {
 		return nil
 	}
 	messagesSent := false
 
-	if responser.GetCallbackResponse() != nil {
-		err := p.respondCallbackQueryResponse(responser)
+	if updater.GetCallbackResponse() != nil {
+		err := p.respondCallbackQueryResponse(updater)
 		if err != nil {
 			log.Println(err)
 		}
 	}
 
-	if responser.GetMessages() != nil {
-		p.callbackMapper(ses, responser)
-		err := p.respondMessages(ses, responser)
+	if updater.GetMessages() != nil {
+		p.callbackMapper(ses, updater)
+		err := p.respondMessages(ses, updater)
 		messagesSent = true
 		if err != nil {
 			log.Println(err)
 		}
 	}
 
-	return p.respondTransit(messagesSent, ses, responser)
+	return p.respondTransit(messagesSent, ses, updater)
 }
 
 // callbackID mapper
 
-func (p *GalaxiaProcessor) callbackMapper(ses *session.Session, responser model.Responser) {
-	messages := responser.GetMessages()
+func (p *GalaxiaProcessor) callbackMapper(ses *session.Session, updater model.Updater) {
+	messages := updater.GetMessages()
 	for _, message := range messages {
 		if message.InlineKeyboard != nil {
 			for _, row := range message.InlineKeyboard {
@@ -257,9 +257,9 @@ func (p *GalaxiaProcessor) callbackMapper(ses *session.Session, responser model.
 
 // responders by type
 
-func (p *GalaxiaProcessor) respondCallbackQueryResponse(responser model.Responser) error {
-	if responser.GetCallbackResponse() != nil {
-		callBackConfig := utils.TransformCallbackQueryResponse(responser.GetCallbackResponse())
+func (p *GalaxiaProcessor) respondCallbackQueryResponse(updater model.Updater) error {
+	if updater.GetCallbackResponse() != nil {
+		callBackConfig := utils.TransformCallbackQueryResponse(updater.GetCallbackResponse())
 		_, err := p.api.AnswerCallbackQuery(callBackConfig)
 		if err != nil {
 			return err
@@ -268,11 +268,11 @@ func (p *GalaxiaProcessor) respondCallbackQueryResponse(responser model.Response
 	return nil
 }
 
-func (p *GalaxiaProcessor) respondMessages(ses *session.Session, responser model.Responser) error {
+func (p *GalaxiaProcessor) respondMessages(ses *session.Session, updater model.Updater) error {
 	var chattables []tgbotapi.Chattable
 
-	userID := responser.GetUserID()
-	messages := responser.GetMessages()
+	userID := updater.GetUserID()
+	messages := updater.GetMessages()
 
 	for _, msg := range messages {
 		if msg.Photo != nil {
@@ -296,10 +296,10 @@ func (p *GalaxiaProcessor) respondMessages(ses *session.Session, responser model
 	return nil
 }
 
-func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Session, responser model.Responser) error {
-	userID := responser.GetUserID()
+func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Session, updater model.Updater) error {
+	userID := updater.GetUserID()
 	currentStageName := ses.GetCurrentStage()
-	transitConfig := responser.GetTransitConfig()
+	transitConfig := updater.GetTransitConfig()
 
 	var chattables []tgbotapi.Chattable
 	var deletees []int64

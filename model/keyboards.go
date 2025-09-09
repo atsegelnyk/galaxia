@@ -8,7 +8,6 @@ const (
 	ThreePerRow
 	FourPerRow
 	FivePerRow
-	All
 	Custom
 )
 
