@@ -149,7 +149,7 @@ func (p *GalaxiaProcessor) processUpdate(update *tgbotapi.Update) error {
 			}
 			ses = p.initSession(update)
 		}
-		ses.AppendStageMessage(update.Message.MessageID)
+		ses.AppendStageMessage(int64(update.Message.MessageID))
 		if update.Message.Command() != "" {
 			return p.processCmd(ses, update)
 		}
@@ -291,7 +291,7 @@ func (p *GalaxiaProcessor) respondMessages(ses *session.Session, responser model
 		if err != nil {
 			return err
 		}
-		ses.AppendStageMessage(sentMsg.MessageID)
+		ses.AppendStageMessage(int64(sentMsg.MessageID))
 	}
 	return nil
 }
@@ -302,7 +302,7 @@ func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Sessio
 	transitConfig := responser.GetTransitConfig()
 
 	var chattables []tgbotapi.Chattable
-	var deletees []int
+	var deletees []int64
 
 	if transitConfig != nil {
 		next, err := p.entityRegistry.GetStage(userID, transitConfig.TargetRef)
@@ -343,11 +343,11 @@ func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Sessio
 		if err != nil {
 			return err
 		}
-		ses.AppendStageMessage(sentMsg.MessageID)
+		ses.AppendStageMessage(int64(sentMsg.MessageID))
 	}
 
 	for _, ID := range deletees {
-		_, err := p.api.DeleteMessage(tgbotapi.NewDeleteMessage(ses.UserID, ID))
+		_, err := p.api.DeleteMessage(tgbotapi.NewDeleteMessage(ses.UserID, int(ID)))
 		if err != nil {
 			fmt.Println(err)
 		}

@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/atsegelnyk/galaxia/model"
+	sessionpb "github.com/atsegelnyk/galaxia/pb"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 )
 
@@ -16,7 +20,7 @@ type Session struct {
 	CurrentStage     model.ResourceRef                 `json:"current_stage"`
 	UserContext      *model.UserContext                `json:"context"`
 	PendingCallbacks map[string]*model.PendingCallback `json:"pending_callbacks"`
-	StageMessages    []int                             `json:"pending_messages"`
+	StageMessages    []int64                           `json:"pending_messages"`
 }
 
 func NewSession(userID int64, opts ...Option) *Session {
@@ -94,7 +98,7 @@ func (s *Session) GetPendingCallbackHandler(callbackID string) (model.ResourceRe
 	return "", errors.New("callback not found")
 }
 
-func (s *Session) AppendStageMessage(msgID int) {
+func (s *Session) AppendStageMessage(msgID int64) {
 	s.StageMessages = append(s.StageMessages, msgID)
 }
 
@@ -109,4 +113,94 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 
 func (s *Session) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, s)
+}
+
+func (s *Session) MarshalProto() ([]byte, error) {
+	var pbCtx *sessionpb.UserContext
+	if s.UserContext != nil {
+		var misc *structpb.Struct
+		if s.UserContext.Misc != nil {
+			m, err := structpb.NewStruct(s.UserContext.Misc)
+			if err != nil {
+				return nil, err
+			}
+			misc = m
+		}
+		pbCtx = &sessionpb.UserContext{
+			UserId:   s.UserContext.UserID,
+			Lang:     s.UserContext.Lang,
+			Name:     s.UserContext.Name,
+			LastName: s.UserContext.LastName,
+			Username: s.UserContext.Username,
+			Misc:     misc,
+		}
+	}
+
+	pbCbs := make(map[string]*sessionpb.PendingCallback, len(s.PendingCallbacks))
+	for k, v := range s.PendingCallbacks {
+		if v == nil {
+			continue
+		}
+		pbCbs[k] = &sessionpb.PendingCallback{
+			HandlerRef: string(v.HandlerRef),
+			Behaviour:  sessionpb.CallbackBehaviour(v.Behaviour),
+		}
+	}
+
+	return proto.Marshal(&sessionpb.Session{
+		ExpireTime:       timestamppb.New(s.ExpireTime),
+		Ttl:              s.TTL,
+		UserId:           s.UserID,
+		CurrentStage:     string(s.CurrentStage),
+		Context:          pbCtx,
+		PendingCallbacks: pbCbs,
+		StageMessages:    s.StageMessages,
+	})
+}
+
+func (s *Session) UnmarshalProto(data []byte) error {
+	var ps sessionpb.Session
+	if err := proto.Unmarshal(data, &ps); err != nil {
+		return err
+	}
+
+	if ps.ExpireTime != nil {
+		s.ExpireTime = ps.ExpireTime.AsTime()
+	} else {
+		s.ExpireTime = time.Time{}
+	}
+
+	s.TTL = ps.Ttl
+	s.UserID = ps.UserId
+	s.CurrentStage = model.ResourceRef(ps.CurrentStage)
+
+	var ctx *model.UserContext
+	if ps.Context != nil {
+		ctx = &model.UserContext{
+			UserID:   ps.Context.UserId,
+			Lang:     ps.Context.Lang,
+			Name:     ps.Context.Name,
+			LastName: ps.Context.LastName,
+			Username: ps.Context.Username,
+		}
+		if ps.Context.Misc != nil {
+			ctx.Misc = ps.Context.Misc.AsMap()
+		}
+	}
+	s.UserContext = ctx
+
+	if len(ps.PendingCallbacks) > 0 {
+		s.PendingCallbacks = make(map[string]*model.PendingCallback, len(ps.PendingCallbacks))
+		for k, v := range ps.PendingCallbacks {
+			s.PendingCallbacks[k] = &model.PendingCallback{
+				HandlerRef: model.ResourceRef(v.HandlerRef),
+				Behaviour:  model.CallbackBehaviour(v.Behaviour),
+			}
+		}
+	} else {
+		s.PendingCallbacks = nil
+	}
+
+	s.StageMessages = ps.StageMessages
+	return nil
 }

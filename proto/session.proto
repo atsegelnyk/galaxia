@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package sessionpb;
+
+option go_package = "github.com/atsegelnyk/galaxia/pb;sessionpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+
+enum CallbackBehaviour {
+  CALLBACK_BEHAVIOUR_RETAIN = 0;
+  CALLBACK_BEHAVIOUR_DELETE = 1;
+}
+
+message PendingCallback {
+  string handler_ref = 1;
+  CallbackBehaviour behaviour = 2;
+}
+
+message UserContext {
+  int64  user_id   = 1;
+  string lang      = 2;
+  string name      = 3;
+  string last_name = 4;
+  string username  = 5;
+  google.protobuf.Struct misc = 6;
+}
+
+message Session {
+  google.protobuf.Timestamp expire_time = 1;
+  int64  ttl                = 2;
+  int64  user_id            = 3;
+  string current_stage      = 4;
+  UserContext context       = 5;
+  map<string, PendingCallback> pending_callbacks = 6;
+  repeated int64 stage_messages = 7;
+}
