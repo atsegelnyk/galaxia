@@ -1,5 +1,7 @@
 package model
 
+type KeyboardLayout int
+
 const (
 	OnePerRow KeyboardLayout = iota
 	TwoPerRow
@@ -10,7 +12,12 @@ const (
 	Custom
 )
 
-type KeyboardLayout int
+type CallbackBehaviour int
+
+const (
+	Retain CallbackBehaviour = iota
+	DeleteCallbackBehaviour
+)
 
 type ReplyButton struct {
 	Text   string
@@ -64,8 +71,10 @@ func (b *ReplyButton) LinkAction(action UserActionFunc) *ReplyButton {
 }
 
 type InlineButton struct {
-	Text               string
-	Data               string
+	Text string
+	Data string
+
+	CallbackBehaviour  CallbackBehaviour
 	CallbackHandlerRef ResourceRef
 }
 

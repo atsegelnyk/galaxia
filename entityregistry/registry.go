@@ -108,25 +108,40 @@ func (e *Registry) OverrideCallbackHandler(handler *model.CallbackHandler, users
 	}
 }
 
-func (e *Registry) GetCommand(userID int64, cmdRef model.ResourceRef) *model.Command {
+func (e *Registry) GetCommand(userID int64, cmdRef model.ResourceRef) (*model.Command, error) {
 	if override, ok := e.overrides[userID]; ok {
-		return override.cmds[cmdRef]
+		if cmd, overrideOk := override.cmds[cmdRef]; overrideOk {
+			return cmd, nil
+		}
 	}
-	return e.cmds[cmdRef]
+	if cmd, ok := e.cmds[cmdRef]; ok {
+		return cmd, nil
+	}
+	return nil, fmt.Errorf("cmd %v not found", cmdRef)
 }
 
-func (e *Registry) GetStage(userID int64, stageRef model.ResourceRef) *model.Stage {
+func (e *Registry) GetStage(userID int64, stageRef model.ResourceRef) (*model.Stage, error) {
 	if override, ok := e.overrides[userID]; ok {
-		return override.stages[stageRef]
+		if stg, overrideOk := override.stages[stageRef]; overrideOk {
+			return stg, nil
+		}
 	}
-	return e.stages[stageRef]
+	if stg, ok := e.stages[stageRef]; ok {
+		return stg, nil
+	}
+	return nil, fmt.Errorf("stage %v not found", stageRef)
 }
 
-func (e *Registry) GetCallbackHandler(userID int64, callbackRef model.ResourceRef) *model.CallbackHandler {
+func (e *Registry) GetCallbackHandler(userID int64, callbackRef model.ResourceRef) (*model.CallbackHandler, error) {
 	if override, ok := e.overrides[userID]; ok {
-		return override.callbackHandlers[callbackRef]
+		if cb, overrideOk := override.callbackHandlers[callbackRef]; overrideOk {
+			return cb, nil
+		}
 	}
-	return e.callbackHandlers[callbackRef]
+	if cb, ok := e.callbackHandlers[callbackRef]; ok {
+		return cb, nil
+	}
+	return nil, fmt.Errorf("callback handler %v not found", callbackRef)
 }
 
 func (e *Registry) checkInitUserOverrides(userID int64) {

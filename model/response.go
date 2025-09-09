@@ -26,10 +26,11 @@ func NewUserResponse(userID int64, options ...UserResponseOption) *UserResponse 
 	return response
 }
 
-func WithTransitTarget(targetStageRef ResourceRef) UserResponseOption {
+func WithTransit(targetStageRef ResourceRef, clean bool) UserResponseOption {
 	return func(response *UserResponse) {
 		response.Transit = &Transit{
 			TargetRef: targetStageRef,
+			Clean:     clean,
 		}
 	}
 }
@@ -52,6 +53,7 @@ type CallbackQueryResponse struct {
 }
 
 type Transit struct {
+	Clean     bool
 	TargetRef ResourceRef
 }
 

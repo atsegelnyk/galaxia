@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var NotFoundError = errors.New("session not found")
+
 type Repository interface {
 	Get(userID int64) (*Session, error)
 	Save(session *Session) error
@@ -30,16 +32,14 @@ func (m *InMemoryRepository) Get(userID int64) (*Session, error) {
 	if session, ok := m.sessions[userID]; ok {
 		return session, nil
 	}
-	return nil, errors.New("session not found")
+	return nil, NotFoundError
 }
 
 func (m *InMemoryRepository) Save(session *Session) error {
-	ts := time.Now().Unix()
-	expireTs := ts + session.TTL
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.sessions[session.UserID] = session
-	m.expireMap[session.UserID] = append(m.expireMap[expireTs], ts)
+	m.expireMap[session.ExpireTime.Unix()] = append(m.expireMap[session.ExpireTime.Unix()], session.UserID)
 	return nil
 }
 
@@ -56,8 +56,9 @@ func (m *InMemoryRepository) expirationWorker() {
 		if userIDs, ok := m.expireMap[ts]; ok {
 			m.mu.Lock()
 			for _, userID := range userIDs {
-				delete(m.expireMap, userID)
+				delete(m.sessions, userID)
 			}
+			delete(m.expireMap, ts)
 			m.mu.Unlock()
 		}
 	}

@@ -2,12 +2,11 @@ package model
 
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 
-type CallbackHandlerFunc func(update *tgbotapi.Update) Responser
+type CallbackHandlerFunc func(ctx *UserContext, update *tgbotapi.Update) Responser
 
-type CallbackContext struct {
-	Retain  bool
-	Handler *CallbackHandler
-	Misc    interface{}
+type PendingCallback struct {
+	HandlerRef ResourceRef
+	Behaviour  CallbackBehaviour
 }
 
 type CallbackHandler struct {

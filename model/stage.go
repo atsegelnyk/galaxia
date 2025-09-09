@@ -7,9 +7,9 @@ import (
 
 var UnsupportedInputError = errors.New("unsupported input")
 
-type InputHandlerFunc func(update *tgbotapi.Update) Responser
+type InputHandlerFunc func(ctx *UserContext, update *tgbotapi.Update) Responser
 
-type UserActionFunc func(update *tgbotapi.Update) Responser
+type UserActionFunc func(ctx *UserContext, update *tgbotapi.Update) Responser
 
 type Stage struct {
 	name         string
@@ -55,7 +55,7 @@ func (s *Stage) Initializer() StageInitializer {
 	return nil
 }
 
-func (s *Stage) ProcessUserEvent(update *tgbotapi.Update) (Responser, error) {
+func (s *Stage) ProcessUserEvent(ctx *UserContext, update *tgbotapi.Update) (Responser, error) {
 	initialMessage, err := s.initializer.Get(update.Message.Chat.ID)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (s *Stage) ProcessUserEvent(update *tgbotapi.Update) (Responser, error) {
 	for _, r := range initialMessage.ReplyKeyboard {
 		for _, b := range r {
 			if b.Text == update.Message.Text {
-				responser := b.Action(update)
+				responser := b.Action(ctx, update)
 				return responser, nil
 			}
 		}
@@ -72,7 +72,7 @@ func (s *Stage) ProcessUserEvent(update *tgbotapi.Update) (Responser, error) {
 	if !s.inputAllowed {
 		return nil, UnsupportedInputError
 	}
-	responser := s.inputHandler(update)
+	responser := s.inputHandler(ctx, update)
 	return responser, nil
 }
 
