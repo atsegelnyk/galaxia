@@ -98,6 +98,11 @@ func (s *Session) AppendStageMessage(msgID int) {
 	s.StageMessages = append(s.StageMessages, msgID)
 }
 
+func (s *Session) Clean() {
+	s.StageMessages = nil
+	s.PendingCallbacks = make(map[string]*model.PendingCallback)
+}
+
 func (s *Session) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s)
 }

@@ -321,7 +321,7 @@ func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Sessio
 
 		if transitConfig.Clean {
 			deletees = append(deletees, ses.StageMessages...)
-			ses.StageMessages = nil
+			ses.Clean()
 		}
 
 	} else if currentStageName != "" && messagesSent {
