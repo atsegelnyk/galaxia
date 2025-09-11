@@ -7,5 +7,5 @@ type UserContext struct {
 	LastName string `json:"last_name,omitempty"`
 	Username string `json:"username,omitempty"`
 
-	Misc map[string]interface{} `json:"misc" json:"misc,omitempty"`
+	Misc map[string]interface{} `json:"misc,omitempty"`
 }

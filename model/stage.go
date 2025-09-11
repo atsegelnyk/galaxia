@@ -2,21 +2,21 @@ package model
 
 import (
 	"errors"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-var UnsupportedInputError = errors.New("unsupported input")
+var UnrecognizedInputError = errors.New("unresolved input")
 
-type InputHandlerFunc func(ctx *UserContext, update *tgbotapi.Update) Updater
-
-type UserActionFunc func(ctx *UserContext, update *tgbotapi.Update) Updater
+type PendingInput struct {
+	Body      string      `json:"body,omitempty"`
+	ActionRef ResourceRef `json:"action_ref" json:"action_ref,omitempty"`
+}
 
 type Stage struct {
-	name         string
-	inputAllowed bool
+	name               string
+	customInputAllowed bool
 
-	initializer  StageInitializer
-	inputHandler InputHandlerFunc
+	initializer   StageInitializer
+	defaultAction ResourceRef
 }
 
 type StageOption func(*Stage)
@@ -37,11 +37,31 @@ func WithInitializer(initializer StageInitializer) StageOption {
 	}
 }
 
-func WithInputHandler(handler InputHandlerFunc) StageOption {
+func (s *Stage) WithInitializer(initializer StageInitializer) *Stage {
+	s.initializer = initializer
+	return s
+}
+
+func WithCustomInputAllowed(allowed bool) StageOption {
 	return func(stage *Stage) {
-		stage.inputAllowed = true
-		stage.inputHandler = handler
+		stage.customInputAllowed = allowed
 	}
+}
+
+func (s *Stage) WithCustomInputAllowed(allowed bool) *Stage {
+	s.customInputAllowed = allowed
+	return s
+}
+
+func WithDefaultAction(defaultAction ResourceRef) StageOption {
+	return func(stage *Stage) {
+		stage.defaultAction = defaultAction
+	}
+}
+
+func (s *Stage) WithDefaultAction(defaultAction ResourceRef) *Stage {
+	s.defaultAction = defaultAction
+	return s
 }
 
 func (s *Stage) SelfRef() ResourceRef {
@@ -55,27 +75,19 @@ func (s *Stage) Initializer() StageInitializer {
 	return nil
 }
 
-func (s *Stage) ProcessUserEvent(ctx *UserContext, update *tgbotapi.Update) (Updater, error) {
-	initialMessage, err := s.initializer.Get(update.Message.Chat.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, r := range initialMessage.ReplyKeyboard {
-		for _, b := range r {
-			if b.Text == update.Message.Text {
-				responser := b.Action(ctx, update)
-				return responser, nil
-			}
-		}
-	}
-	if !s.inputAllowed {
-		return nil, UnsupportedInputError
-	}
-	responser := s.inputHandler(ctx, update)
-	return responser, nil
+func (s *Stage) DefaultActionRef() ResourceRef {
+	return s.defaultAction
 }
 
+func (s *Stage) CustomInputAllowed() bool {
+	return s.customInputAllowed
+}
+
+func (s *Stage) Initialize(userID int64) (*Message, error) {
+	return s.initializer.Get(userID)
+}
+
+// StageInitializer represents initializer interface
 type StageInitializer interface {
 	Get(userId int64) (*Message, error)
 }

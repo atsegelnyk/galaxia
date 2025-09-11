@@ -1,19 +1,34 @@
 package bootstrap
 
 type BotSchema struct {
-	Auther   *AutherSchema   `json:"auther"`
-	Commands []CommandSchema `json:"commands"`
-	Stages   []StageSchema   `json:"stages"`
+	Auther           *AutherSchema           `json:"auther"`
+	Actions          []ActionSchema          `json:"actions"`
+	CallbackHandlers []CallbackHandlerSchema `json:"callback_handlers"`
+	Commands         []CommandSchema         `json:"commands"`
+	Stages           []StageSchema           `json:"stages"`
+}
+
+type ActionSchema struct {
+	Name    string         `json:"name"`
+	Message string         `json:"message"`
+	Transit *TransitSchema `json:"transit,omitempty"`
+}
+
+type CallbackHandlerSchema struct {
+	Name      string `json:"name"`
+	ActionRef string `json:"action_ref"`
 }
 
 type CommandSchema struct {
-	Name   string       `json:"name"`
-	Action ActionSchema `json:"action"`
+	Name      string `json:"name"`
+	ActionRef string `json:"action_ref"`
 }
 
 type StageSchema struct {
-	Name        string             `json:"name"`
-	Initializer *InitializerSchema `json:"initializer,omitempty"`
+	Name             string             `json:"name"`
+	DefaultActionRef string             `json:"default_action_ref,omitempty"`
+	InputAllowed     bool               `json:"input_allowed,omitempty"`
+	Initializer      *InitializerSchema `json:"initializer,omitempty"`
 }
 
 type InitializerSchema struct {
@@ -27,17 +42,12 @@ type InitializerKeyboardSchema struct {
 }
 
 type InitializerKeyboardButtonSchema struct {
-	Name   string       `json:"name"`
-	Action ActionSchema `json:"action"`
+	Name      string `json:"name"`
+	ActionRef string `json:"action_ref"`
 }
 
 type InitializerMessageSchema struct {
 	Text string `json:"text"`
-}
-
-type ActionSchema struct {
-	Message string         `json:"message"`
-	Transit *TransitSchema `json:"transit,omitempty"`
 }
 
 type TransitSchema struct {

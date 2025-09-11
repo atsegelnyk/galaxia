@@ -213,7 +213,8 @@ type Session struct {
 	CurrentStage     string                      `protobuf:"bytes,4,opt,name=current_stage,json=currentStage,proto3" json:"current_stage,omitempty"`
 	Context          *UserContext                `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
 	PendingCallbacks map[string]*PendingCallback `protobuf:"bytes,6,rep,name=pending_callbacks,json=pendingCallbacks,proto3" json:"pending_callbacks,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	StageMessages    []int64                     `protobuf:"varint,7,rep,packed,name=stage_messages,json=stageMessages,proto3" json:"stage_messages,omitempty"`
+	PendingInputs    map[string]string           `protobuf:"bytes,7,rep,name=pending_inputs,json=pendingInputs,proto3" json:"pending_inputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	StageMessages    []int64                     `protobuf:"varint,8,rep,packed,name=stage_messages,json=stageMessages,proto3" json:"stage_messages,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -290,6 +291,13 @@ func (x *Session) GetPendingCallbacks() map[string]*PendingCallback {
 	return nil
 }
 
+func (x *Session) GetPendingInputs() map[string]string {
+	if x != nil {
+		return x.PendingInputs
+	}
+	return nil
+}
+
 func (x *Session) GetStageMessages() []int64 {
 	if x != nil {
 		return x.StageMessages
@@ -312,7 +320,7 @@ const file_session_proto_rawDesc = "" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
 	"\tlast_name\x18\x04 \x01(\tR\blastName\x12\x1a\n" +
 	"\busername\x18\x05 \x01(\tR\busername\x12+\n" +
-	"\x04misc\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x04misc\"\xa7\x03\n" +
+	"\x04misc\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x04misc\"\xb7\x04\n" +
 	"\aSession\x12;\n" +
 	"\vexpire_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"expireTime\x12\x10\n" +
@@ -320,11 +328,15 @@ const file_session_proto_rawDesc = "" +
 	"\auser_id\x18\x03 \x01(\x03R\x06userId\x12#\n" +
 	"\rcurrent_stage\x18\x04 \x01(\tR\fcurrentStage\x120\n" +
 	"\acontext\x18\x05 \x01(\v2\x16.sessionpb.UserContextR\acontext\x12U\n" +
-	"\x11pending_callbacks\x18\x06 \x03(\v2(.sessionpb.Session.PendingCallbacksEntryR\x10pendingCallbacks\x12%\n" +
-	"\x0estage_messages\x18\a \x03(\x03R\rstageMessages\x1a_\n" +
+	"\x11pending_callbacks\x18\x06 \x03(\v2(.sessionpb.Session.PendingCallbacksEntryR\x10pendingCallbacks\x12L\n" +
+	"\x0epending_inputs\x18\a \x03(\v2%.sessionpb.Session.PendingInputsEntryR\rpendingInputs\x12%\n" +
+	"\x0estage_messages\x18\b \x03(\x03R\rstageMessages\x1a_\n" +
 	"\x15PendingCallbacksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
-	"\x05value\x18\x02 \x01(\v2\x1a.sessionpb.PendingCallbackR\x05value:\x028\x01*Q\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.sessionpb.PendingCallbackR\x05value:\x028\x01\x1a@\n" +
+	"\x12PendingInputsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*Q\n" +
 	"\x11CallbackBehaviour\x12\x1d\n" +
 	"\x19CALLBACK_BEHAVIOUR_RETAIN\x10\x00\x12\x1d\n" +
 	"\x19CALLBACK_BEHAVIOUR_DELETE\x10\x01B,Z*github.com/atsegelnyk/galaxia/pb;sessionpbb\x06proto3"
@@ -342,28 +354,30 @@ func file_session_proto_rawDescGZIP() []byte {
 }
 
 var file_session_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_session_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_session_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_session_proto_goTypes = []any{
 	(CallbackBehaviour)(0),        // 0: sessionpb.CallbackBehaviour
 	(*PendingCallback)(nil),       // 1: sessionpb.PendingCallback
 	(*UserContext)(nil),           // 2: sessionpb.UserContext
 	(*Session)(nil),               // 3: sessionpb.Session
 	nil,                           // 4: sessionpb.Session.PendingCallbacksEntry
-	(*structpb.Struct)(nil),       // 5: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	nil,                           // 5: sessionpb.Session.PendingInputsEntry
+	(*structpb.Struct)(nil),       // 6: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
 }
 var file_session_proto_depIdxs = []int32{
 	0, // 0: sessionpb.PendingCallback.behaviour:type_name -> sessionpb.CallbackBehaviour
-	5, // 1: sessionpb.UserContext.misc:type_name -> google.protobuf.Struct
-	6, // 2: sessionpb.Session.expire_time:type_name -> google.protobuf.Timestamp
+	6, // 1: sessionpb.UserContext.misc:type_name -> google.protobuf.Struct
+	7, // 2: sessionpb.Session.expire_time:type_name -> google.protobuf.Timestamp
 	2, // 3: sessionpb.Session.context:type_name -> sessionpb.UserContext
 	4, // 4: sessionpb.Session.pending_callbacks:type_name -> sessionpb.Session.PendingCallbacksEntry
-	1, // 5: sessionpb.Session.PendingCallbacksEntry.value:type_name -> sessionpb.PendingCallback
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	5, // 5: sessionpb.Session.pending_inputs:type_name -> sessionpb.Session.PendingInputsEntry
+	1, // 6: sessionpb.Session.PendingCallbacksEntry.value:type_name -> sessionpb.PendingCallback
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_session_proto_init() }
@@ -377,7 +391,7 @@ func file_session_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_session_proto_rawDesc), len(file_session_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

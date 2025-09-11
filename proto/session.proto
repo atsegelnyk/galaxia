@@ -34,5 +34,6 @@ message Session {
   string current_stage      = 4;
   UserContext context       = 5;
   map<string, PendingCallback> pending_callbacks = 6;
-  repeated int64 stage_messages = 7;
+  map<string, string> pending_inputs = 7;
+  repeated int64 stage_messages = 8;
 }

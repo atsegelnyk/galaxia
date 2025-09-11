@@ -23,6 +23,20 @@ func FromFile(path string) (*entityregistry.Registry, error) {
 		bootstrapAuther(schema.Auther),
 	)
 
+	for _, act := range schema.Actions {
+		err = bootstrapAction(act, er)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, cb := range schema.CallbackHandlers {
+		err = bootstrapCallbackHandler(cb, er)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for _, cmd := range schema.Commands {
 		err = bootstrapCommand(cmd, er)
 		if err != nil {
@@ -58,51 +72,9 @@ func readConfigFromFile(path string) (*BotSchema, error) {
 	return &schema, nil
 }
 
-func bootstrapCommand(cmdSchema CommandSchema, er *entityregistry.Registry) error {
-	cmdAction := bootstrapAction(cmdSchema.Action)
-	cmd := model.NewCommand(cmdSchema.Name, cmdAction)
-	return er.RegisterCommand(cmd)
-}
-
-func bootstrapStage(stageSchema StageSchema, er *entityregistry.Registry) error {
-	var stageInitializerOption model.StageOption
-
-	if stageSchema.Initializer != nil {
-		var initializerKeyboardOption model.MessageOption
-		if stageSchema.Initializer.Keyboard != nil {
-			var buttons []*model.ReplyButton
-			for _, buttonSchema := range stageSchema.Initializer.Keyboard.Buttons {
-				buttons = append(buttons, bootstrapReplyButton(buttonSchema))
-			}
-			keyboard := model.NewReplyKeyboard(
-				bootstrapKeyboardLayout(stageSchema.Initializer.Keyboard.Layout),
-				buttons...,
-			)
-			initializerKeyboardOption = model.WithReplyKeyboard(keyboard)
-		}
-
-		message := model.NewMessage(
-			model.WithText(stageSchema.Initializer.Message),
-			initializerKeyboardOption,
-		)
-		stageInitializerOption = model.WithInitializer(
-			model.NewStaticStageInitializer(message),
-		)
-	}
-
-	stage := model.NewStage(stageSchema.Name,
-		stageInitializerOption,
-	)
-	return er.RegisterStage(stage)
-}
-
-func bootstrapReplyButton(buttonSchema InitializerKeyboardButtonSchema) *model.ReplyButton {
-	buttonAction := bootstrapAction(buttonSchema.Action)
-	return model.NewReplyButton(buttonSchema.Name).LinkAction(buttonAction)
-}
-
-func bootstrapAction(actionSchema ActionSchema) model.UserActionFunc {
-	return func(ctx *model.UserContext, update *tgbotapi.Update) model.Updater {
+func bootstrapAction(actionSchema ActionSchema, er *entityregistry.Registry) error {
+	action := model.NewAction(actionSchema.Name, func(ctx *model.UserContext, update *tgbotapi.Update) model.Updater {
+		
 		msgText, err := executeUserTemplate(actionSchema.Message, ctx)
 		var message *model.Message
 		if err != nil {
@@ -123,7 +95,60 @@ func bootstrapAction(actionSchema ActionSchema) model.UserActionFunc {
 			model.WithMessages(message),
 			transitOption,
 		)
+	})
+
+	return er.RegisterAction(action)
+}
+
+func bootstrapCallbackHandler(cbSchema CallbackHandlerSchema, er *entityregistry.Registry) error {
+	return er.RegisterCallbackHandler(
+		model.NewCallbackHandler(
+			cbSchema.Name,
+			model.ResourceRef(cbSchema.ActionRef),
+		),
+	)
+}
+
+func bootstrapCommand(cmdSchema CommandSchema, er *entityregistry.Registry) error {
+	return er.RegisterCommand(
+		model.NewCommand(
+			cmdSchema.Name,
+			model.ResourceRef(cmdSchema.ActionRef),
+		),
+	)
+}
+
+func bootstrapStage(stageSchema StageSchema, er *entityregistry.Registry) error {
+	stage := model.NewStage(
+		stageSchema.Name,
+		model.WithCustomInputAllowed(stageSchema.InputAllowed),
+		model.WithDefaultAction(model.ResourceRef(stageSchema.DefaultActionRef)),
+	)
+
+	if stageSchema.Initializer != nil {
+		initializerMessage := model.NewMessage(
+			model.WithText(stageSchema.Initializer.Message),
+		)
+
+		if stageSchema.Initializer.Keyboard != nil {
+			var buttons []*model.ReplyButton
+			for _, buttonSchema := range stageSchema.Initializer.Keyboard.Buttons {
+				buttons = append(buttons, bootstrapReplyButton(buttonSchema))
+			}
+			keyboard := model.NewReplyKeyboard(
+				bootstrapKeyboardLayout(stageSchema.Initializer.Keyboard.Layout),
+				buttons...,
+			)
+			initializerMessage.WithReplyKeyboard(keyboard)
+		}
+
+		stage.WithInitializer(model.NewStaticStageInitializer(initializerMessage))
 	}
+	return er.RegisterStage(stage)
+}
+
+func bootstrapReplyButton(buttonSchema InitializerKeyboardButtonSchema) *model.ReplyButton {
+	return model.NewReplyButton(buttonSchema.Name).LinkAction(model.ResourceRef(buttonSchema.ActionRef))
 }
 
 func bootstrapKeyboardLayout(layout string) model.KeyboardLayout {

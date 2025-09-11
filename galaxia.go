@@ -174,7 +174,15 @@ func (p *GalaxiaProcessor) processCmd(session *session.Session, update *tgbotapi
 	if err != nil {
 		return err
 	}
-	updater := cmd.Handler()(session.UserContext, update)
+	action, err := p.entityRegistry.GetAction(
+		update.Message.Chat.ID,
+		cmd.ActionRef(),
+	)
+	if err != nil {
+		return err
+	}
+
+	updater := action.Func()(session.UserContext, update)
 	return p.handleUserUpdate(session, updater)
 }
 
@@ -182,7 +190,14 @@ func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbo
 	stageRef := session.GetCurrentStage()
 	if stageRef.Empty() {
 		cmd, _ := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
-		response := cmd.Handler()(session.UserContext, update)
+		action, err := p.entityRegistry.GetAction(
+			update.Message.Chat.ID,
+			cmd.ActionRef(),
+		)
+		if err != nil {
+			return err
+		}
+		response := action.Func()(session.UserContext, update)
 		return p.handleUserUpdate(session, response)
 	}
 
@@ -190,10 +205,12 @@ func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbo
 	if err != nil {
 		return err
 	}
-	updater, err := stg.ProcessUserEvent(session.UserContext, update)
+
+	updater, err := p.processStage(session, stg, update)
 	if err != nil {
-		log.Println(err)
+		return err
 	}
+
 	return p.handleUserUpdate(session, updater)
 }
 
@@ -207,7 +224,15 @@ func (p *GalaxiaProcessor) processCallbackQuery(session *session.Session, update
 	if err != nil {
 		return err
 	}
-	updater := callbackHandler.Func()(session.UserContext, update)
+	action, err := p.entityRegistry.GetAction(
+		int64(update.CallbackQuery.From.ID),
+		callbackHandler.ActionRef(),
+	)
+	if err != nil {
+		return err
+	}
+
+	updater := action.Func()(session.UserContext, update)
 	return p.handleUserUpdate(session, updater)
 }
 
@@ -236,6 +261,45 @@ func (p *GalaxiaProcessor) handleUserUpdate(ses *session.Session, updater model.
 	}
 
 	return p.respondTransit(messagesSent, ses, updater)
+}
+
+// callbackID mapper
+
+func (p *GalaxiaProcessor) initStage(ses *session.Session, stg *model.Stage) (*model.Message, error) {
+	initMessage, err := stg.Initialize(ses.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if initMessage != nil {
+		for _, row := range initMessage.ReplyKeyboard {
+			for _, button := range row {
+				ses.PendingInputs[button.Text] = button.ActionRef
+			}
+		}
+	}
+	return initMessage, nil
+}
+
+func (p *GalaxiaProcessor) processStage(ses *session.Session, stg *model.Stage, update *tgbotapi.Update) (model.Updater, error) {
+	if actionRef, ok := ses.PendingInputs[update.Message.Text]; ok {
+		action, err := p.entityRegistry.GetAction(update.Message.Chat.ID, actionRef)
+		if err != nil {
+			return nil, err
+		}
+		updater := action.Func()(ses.UserContext, update)
+		return updater, nil
+	}
+
+	if stg.CustomInputAllowed() {
+		defActionRef := stg.DefaultActionRef()
+		defAction, err := p.entityRegistry.GetAction(update.Message.Chat.ID, defActionRef)
+		if err != nil {
+			return nil, err
+		}
+		updater := defAction.Func()(ses.UserContext, update)
+		return updater, nil
+	}
+	return nil, model.UnrecognizedInputError
 }
 
 // callbackID mapper
@@ -311,7 +375,9 @@ func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Sessio
 		}
 		ses.SetNextStage(next.SelfRef())
 
-		initializer, err := next.Initializer().Get(userID)
+		ses.PendingInputs = make(map[string]model.ResourceRef)
+
+		initializer, err := p.initStage(ses, next)
 		if err != nil {
 			return err
 		}

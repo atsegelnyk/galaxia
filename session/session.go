@@ -20,6 +20,7 @@ type Session struct {
 	CurrentStage     model.ResourceRef                 `json:"current_stage"`
 	UserContext      *model.UserContext                `json:"context"`
 	PendingCallbacks map[string]*model.PendingCallback `json:"pending_callbacks"`
+	PendingInputs    map[string]model.ResourceRef      `json:"pending_inputs"`
 	StageMessages    []int64                           `json:"pending_messages"`
 }
 
@@ -108,7 +109,7 @@ func (s *Session) Clean() {
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s)
+	return json.Marshal(*s)
 }
 
 func (s *Session) UnmarshalJSON(data []byte) error {
@@ -147,6 +148,14 @@ func (s *Session) MarshalProto() ([]byte, error) {
 		}
 	}
 
+	pInputs := make(map[string]string, len(s.PendingInputs))
+	for k, v := range s.PendingInputs {
+		if v == "" {
+			continue
+		}
+		pInputs[k] = string(v)
+	}
+
 	return proto.Marshal(&sessionpb.Session{
 		ExpireTime:       timestamppb.New(s.ExpireTime),
 		Ttl:              s.TTL,
@@ -154,6 +163,7 @@ func (s *Session) MarshalProto() ([]byte, error) {
 		CurrentStage:     string(s.CurrentStage),
 		Context:          pbCtx,
 		PendingCallbacks: pbCbs,
+		PendingInputs:    pInputs,
 		StageMessages:    s.StageMessages,
 	})
 }
@@ -197,10 +207,14 @@ func (s *Session) UnmarshalProto(data []byte) error {
 				Behaviour:  model.CallbackBehaviour(v.Behaviour),
 			}
 		}
-	} else {
-		s.PendingCallbacks = nil
 	}
-
+	
+	if len(ps.PendingInputs) > 0 {
+		s.PendingInputs = make(map[string]model.ResourceRef, len(ps.PendingInputs))
+		for k, v := range ps.PendingInputs {
+			s.PendingInputs[k] = model.ResourceRef(v)
+		}
+	}
 	s.StageMessages = ps.StageMessages
 	return nil
 }

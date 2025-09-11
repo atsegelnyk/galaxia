@@ -1,23 +1,19 @@
 package model
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-
-type CallbackHandlerFunc func(ctx *UserContext, update *tgbotapi.Update) Updater
-
 type PendingCallback struct {
-	HandlerRef ResourceRef
-	Behaviour  CallbackBehaviour
+	HandlerRef ResourceRef       `json:"handler_ref"`
+	Behaviour  CallbackBehaviour `json:"behaviour"`
 }
 
 type CallbackHandler struct {
-	name    string
-	handler CallbackHandlerFunc
+	name      string
+	actionRef ResourceRef
 }
 
-func NewCallbackHandler(name string, handler CallbackHandlerFunc) *CallbackHandler {
+func NewCallbackHandler(name string, actionRef ResourceRef) *CallbackHandler {
 	return &CallbackHandler{
-		name:    name,
-		handler: handler,
+		name:      name,
+		actionRef: actionRef,
 	}
 }
 
@@ -25,6 +21,6 @@ func (c *CallbackHandler) SelfRef() ResourceRef {
 	return ResourceRef(c.name)
 }
 
-func (c *CallbackHandler) Func() CallbackHandlerFunc {
-	return c.handler
+func (c *CallbackHandler) ActionRef() ResourceRef {
+	return c.actionRef
 }

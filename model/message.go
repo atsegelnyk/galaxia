@@ -28,16 +28,31 @@ func WithText(text string) MessageOption {
 	}
 }
 
+func (m *Message) WithText(text string) *Message {
+	m.Text = text
+	return m
+}
+
 func WithReplyKeyboard(keyboard [][]*ReplyButton) MessageOption {
 	return func(msg *Message) {
 		msg.ReplyKeyboard = keyboard
 	}
 }
 
+func (m *Message) WithReplyKeyboard(keyboard [][]*ReplyButton) *Message {
+	m.ReplyKeyboard = keyboard
+	return m
+}
+
 func WithInlineKeyboard(keyboard [][]*InlineButton) MessageOption {
 	return func(msg *Message) {
 		msg.InlineKeyboard = keyboard
 	}
+}
+
+func (m *Message) WithInlineKeyboard(keyboard [][]*InlineButton) *Message {
+	m.InlineKeyboard = keyboard
+	return m
 }
 
 func WithPhoto(photo []byte) MessageOption {
@@ -47,8 +62,18 @@ func WithPhoto(photo []byte) MessageOption {
 
 }
 
+func (m *Message) WithPhoto(photo []byte) *Message {
+	m.Photo = photo
+	return m
+}
+
 func WithVideo(video []byte) MessageOption {
 	return func(msg *Message) {
 		msg.Video = video
 	}
+}
+
+func (m *Message) WithVideo(video []byte) *Message {
+	m.Video = video
+	return m
 }

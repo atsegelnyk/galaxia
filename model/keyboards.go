@@ -19,8 +19,8 @@ const (
 )
 
 type ReplyButton struct {
-	Text   string
-	Action UserActionFunc
+	Text      string
+	ActionRef ResourceRef
 }
 
 func NewReplyButton(name string) *ReplyButton {
@@ -64,8 +64,8 @@ func NewReplyKeyboard(layout KeyboardLayout, buttons ...*ReplyButton) [][]*Reply
 	return keyboard
 }
 
-func (b *ReplyButton) LinkAction(action UserActionFunc) *ReplyButton {
-	b.Action = action
+func (b *ReplyButton) LinkAction(actionRef ResourceRef) *ReplyButton {
+	b.ActionRef = actionRef
 	return b
 }
 
@@ -83,8 +83,8 @@ func NewInlineButton(name string) *InlineButton {
 	}
 }
 
-func (b *InlineButton) LinkCallbackHandler(handlerRef Referencer) *InlineButton {
-	b.CallbackHandlerRef = handlerRef.SelfRef()
+func (b *InlineButton) LinkCallbackHandler(handlerRef ResourceRef) *InlineButton {
+	b.CallbackHandlerRef = handlerRef
 	return b
 }
 
