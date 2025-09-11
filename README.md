@@ -311,8 +311,3 @@ galaxia.WithAuthHandler(myAuther)
 - [ ] Middleware hooks (logging/metrics)
 - [ ] Dynamic stage injection from external config
 
----
-
-## License
-
-MIT (unless stated otherwise in the repository).
