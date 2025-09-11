@@ -29,41 +29,6 @@ func NewReplyButton(name string) *ReplyButton {
 	}
 }
 
-func NewReplyKeyboard(layout KeyboardLayout, buttons ...*ReplyButton) [][]*ReplyButton {
-	var keyboard [][]*ReplyButton
-	switch layout {
-	case OnePerRow:
-		for _, button := range buttons {
-			row := []*ReplyButton{button}
-			keyboard = append(keyboard, row)
-		}
-	case TwoPerRow:
-		for i := 0; i < len(buttons); i += 2 {
-			if i+1 >= len(buttons) {
-				keyboard = append(keyboard, buttons[i:])
-				break
-			}
-			row := []*ReplyButton{buttons[i], buttons[i+1]}
-			keyboard = append(keyboard, row)
-		}
-	case ThreePerRow:
-		for i := 0; i < len(buttons); i += 3 {
-			if i+2 >= len(buttons) {
-				keyboard = append(keyboard, buttons[i:])
-				break
-			}
-			row := []*ReplyButton{buttons[i], buttons[i+1], buttons[i+2]}
-			keyboard = append(keyboard, row)
-		}
-	default:
-		for _, button := range buttons {
-			row := []*ReplyButton{button}
-			keyboard = append(keyboard, row)
-		}
-	}
-	return keyboard
-}
-
 func (b *ReplyButton) LinkAction(actionRef ResourceRef) *ReplyButton {
 	b.ActionRef = actionRef
 	return b
@@ -88,36 +53,34 @@ func (b *InlineButton) LinkCallbackHandler(handlerRef ResourceRef) *InlineButton
 	return b
 }
 
-func NewInlineKeyboard(layout KeyboardLayout, buttons ...*InlineButton) [][]*InlineButton {
-	var keyboard [][]*InlineButton
+func NewKeyboard[T any](layout KeyboardLayout, buttons ...T) [][]T {
+	var keyboard [][]T
 	switch layout {
 	case OnePerRow:
 		for _, button := range buttons {
-			row := []*InlineButton{button}
-			keyboard = append(keyboard, row)
+			keyboard = append(keyboard, []T{button})
 		}
 	case TwoPerRow:
 		for i := 0; i < len(buttons); i += 2 {
-			if i+1 > len(buttons) {
+			if i+1 >= len(buttons) {
 				keyboard = append(keyboard, buttons[i:])
 				break
 			}
-			row := []*InlineButton{buttons[i], buttons[i+1]}
+			row := []T{buttons[i], buttons[i+1]}
 			keyboard = append(keyboard, row)
 		}
 	case ThreePerRow:
 		for i := 0; i < len(buttons); i += 3 {
-			if i+2 > len(buttons) {
+			if i+2 >= len(buttons) {
 				keyboard = append(keyboard, buttons[i:])
 				break
 			}
-			row := []*InlineButton{buttons[i], buttons[i+1], buttons[i+2]}
+			row := []T{buttons[i], buttons[i+1], buttons[i+2]}
 			keyboard = append(keyboard, row)
 		}
 	default:
 		for _, button := range buttons {
-			row := []*InlineButton{button}
-			keyboard = append(keyboard, row)
+			keyboard = append(keyboard, []T{button})
 		}
 	}
 	return keyboard
