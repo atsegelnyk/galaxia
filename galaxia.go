@@ -99,10 +99,13 @@ func (p *GalaxiaProcessor) Start(ctx context.Context) {
 
 }
 
-func (p *GalaxiaProcessor) HandleUserUpdate(userID int64, updater model.Updater) error {
-	ses, err := p.sessionRepository.Get(userID)
+func (p *GalaxiaProcessor) HandleUserUpdate(updater model.Updater) error {
+	ses, err := p.sessionRepository.Get(updater.GetUserID())
 	if err != nil {
-		return err
+		if !errors.Is(err, session.NotFoundError) {
+			return err
+		}
+		ses = session.NewSession(updater.GetUserID())
 	}
 	return p.handleUserUpdate(ses, updater)
 }

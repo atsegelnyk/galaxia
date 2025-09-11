@@ -74,7 +74,7 @@ func readConfigFromFile(path string) (*BotSchema, error) {
 
 func bootstrapAction(actionSchema ActionSchema, er *entityregistry.Registry) error {
 	action := model.NewAction(actionSchema.Name, func(ctx *model.UserContext, update *tgbotapi.Update) model.Updater {
-		
+
 		msgText, err := executeUserTemplate(actionSchema.Message, ctx)
 		var message *model.Message
 		if err != nil {
@@ -91,7 +91,7 @@ func bootstrapAction(actionSchema ActionSchema, er *entityregistry.Registry) err
 				actionSchema.Transit.Clean,
 			)
 		}
-		return model.NewUserResponse(update.Message.Chat.ID,
+		return model.NewUserUpdate(update.Message.Chat.ID,
 			model.WithMessages(message),
 			transitOption,
 		)
@@ -135,7 +135,7 @@ func bootstrapStage(stageSchema StageSchema, er *entityregistry.Registry) error 
 			for _, buttonSchema := range stageSchema.Initializer.Keyboard.Buttons {
 				buttons = append(buttons, bootstrapReplyButton(buttonSchema))
 			}
-			keyboard := model.NewReplyKeyboard(
+			keyboard := model.NewKeyboard[*model.ReplyButton](
 				bootstrapKeyboardLayout(stageSchema.Initializer.Keyboard.Layout),
 				buttons...,
 			)
