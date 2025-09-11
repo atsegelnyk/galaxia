@@ -276,7 +276,7 @@ Built-ins:
 
 Attach via:
 ```go
-processor.WithAuthHandler(myAuther)
+galaxia.WithAuthHandler(myAuther)
 ```
 
 ---
