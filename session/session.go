@@ -33,6 +33,7 @@ func NewSession(userID int64, opts ...Option) *Session {
 		TTL:              DefaultSessionTTL,
 		ExpireTime:       time.Now().Add(time.Duration(DefaultSessionTTL) * time.Second),
 		PendingCallbacks: make(map[string]*model.PendingCallback),
+		PendingInputs:    make(map[string]model.ResourceRef),
 	}
 	for _, opt := range opts {
 		opt(baseSession)
@@ -195,6 +196,8 @@ func (s *Session) UnmarshalProto(data []byte) error {
 		}
 		if ps.Context.Misc != nil {
 			ctx.Misc = ps.Context.Misc.AsMap()
+		} else {
+			ctx.Misc = make(map[string]interface{})
 		}
 	}
 	s.UserContext = ctx
@@ -207,14 +210,19 @@ func (s *Session) UnmarshalProto(data []byte) error {
 				Behaviour:  model.CallbackBehaviour(v.Behaviour),
 			}
 		}
+	} else {
+		s.PendingCallbacks = make(map[string]*model.PendingCallback)
 	}
-	
+
 	if len(ps.PendingInputs) > 0 {
 		s.PendingInputs = make(map[string]model.ResourceRef, len(ps.PendingInputs))
 		for k, v := range ps.PendingInputs {
 			s.PendingInputs[k] = model.ResourceRef(v)
 		}
+	} else {
+		s.PendingInputs = make(map[string]model.ResourceRef)
 	}
+
 	s.StageMessages = ps.StageMessages
 	return nil
 }
