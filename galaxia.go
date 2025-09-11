@@ -1,4 +1,4 @@
-package main
+package galaxia
 
 import (
 	"context"
@@ -14,17 +14,17 @@ import (
 
 const StartCMDName = "start"
 
-type GalaxiaProcessorOption func(*GalaxiaProcessor)
+type ProcessorOption func(*Processor)
 
-type GalaxiaProcessor struct {
+type Processor struct {
 	api *tgbotapi.BotAPI
 
 	sessionRepository session.Repository
 	entityRegistry    *entityregistry.Registry
 }
 
-func NewGalaxiaProcessor(opts ...GalaxiaProcessorOption) *GalaxiaProcessor {
-	g := &GalaxiaProcessor{
+func NewProcessor(opts ...ProcessorOption) *Processor {
+	g := &Processor{
 		entityRegistry: entityregistry.New(),
 	}
 	for _, opt := range opts {
@@ -33,43 +33,43 @@ func NewGalaxiaProcessor(opts ...GalaxiaProcessorOption) *GalaxiaProcessor {
 	return g
 }
 
-func WithApi(api *tgbotapi.BotAPI) GalaxiaProcessorOption {
-	return func(g *GalaxiaProcessor) {
+func WithApi(api *tgbotapi.BotAPI) ProcessorOption {
+	return func(g *Processor) {
 		g.api = api
 	}
 }
 
-func WithBotToken(token string) GalaxiaProcessorOption {
+func WithBotToken(token string) ProcessorOption {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return func(g *GalaxiaProcessor) {
+	return func(g *Processor) {
 		g.api = api
 	}
 }
 
-func WithEntityRegistry(er *entityregistry.Registry) GalaxiaProcessorOption {
-	return func(g *GalaxiaProcessor) {
+func WithEntityRegistry(er *entityregistry.Registry) ProcessorOption {
+	return func(g *Processor) {
 		g.entityRegistry = er
 	}
 }
 
-func WithSessionRepository(r session.Repository) GalaxiaProcessorOption {
-	return func(g *GalaxiaProcessor) {
+func WithSessionRepository(r session.Repository) ProcessorOption {
+	return func(g *Processor) {
 		g.sessionRepository = r
 	}
 }
 
-func (p *GalaxiaProcessor) RegisterCMD(cmd *model.Command) error {
+func (p *Processor) RegisterCMD(cmd *model.Command) error {
 	return p.entityRegistry.RegisterCommand(cmd)
 }
 
-func (p *GalaxiaProcessor) RegisterStage(stage *model.Stage) error {
+func (p *Processor) RegisterStage(stage *model.Stage) error {
 	return p.RegisterStage(stage)
 }
 
-func (p *GalaxiaProcessor) Start(ctx context.Context) {
+func (p *Processor) Start(ctx context.Context) {
 	err := p.preflightCheck()
 	if err != nil {
 		log.Fatal(err)
@@ -99,7 +99,7 @@ func (p *GalaxiaProcessor) Start(ctx context.Context) {
 
 }
 
-func (p *GalaxiaProcessor) HandleUserUpdate(updater model.Updater) error {
+func (p *Processor) HandleUserUpdate(updater model.Updater) error {
 	ses, err := p.sessionRepository.Get(updater.GetUserID())
 	if err != nil {
 		if !errors.Is(err, session.NotFoundError) {
@@ -110,7 +110,7 @@ func (p *GalaxiaProcessor) HandleUserUpdate(updater model.Updater) error {
 	return p.handleUserUpdate(ses, updater)
 }
 
-func (p *GalaxiaProcessor) preflightCheck() error {
+func (p *Processor) preflightCheck() error {
 	_, err := p.entityRegistry.GetCommand(0, StartCMDName)
 	if err != nil {
 		return err
@@ -126,7 +126,7 @@ func (p *GalaxiaProcessor) preflightCheck() error {
 
 // event processor
 
-func (p *GalaxiaProcessor) initSession(update *tgbotapi.Update) *session.Session {
+func (p *Processor) initSession(update *tgbotapi.Update) *session.Session {
 	return session.NewSession(
 		update.Message.Chat.ID,
 		session.WithUsername(update.Message.From.UserName),
@@ -136,7 +136,7 @@ func (p *GalaxiaProcessor) initSession(update *tgbotapi.Update) *session.Session
 	)
 }
 
-func (p *GalaxiaProcessor) processUpdate(update *tgbotapi.Update) error {
+func (p *Processor) processUpdate(update *tgbotapi.Update) error {
 	if update.Message != nil {
 		if auther := p.entityRegistry.GetAuther(); auther != nil {
 			err := auther.Authorize(update.Message.Chat.ID)
@@ -172,7 +172,7 @@ func (p *GalaxiaProcessor) processUpdate(update *tgbotapi.Update) error {
 
 // event processors by type
 
-func (p *GalaxiaProcessor) processCmd(session *session.Session, update *tgbotapi.Update) error {
+func (p *Processor) processCmd(session *session.Session, update *tgbotapi.Update) error {
 	cmd, err := p.entityRegistry.GetCommand(update.Message.Chat.ID, model.ResourceRef(update.Message.Command()))
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func (p *GalaxiaProcessor) processCmd(session *session.Session, update *tgbotapi
 	return p.handleUserUpdate(session, updater)
 }
 
-func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbotapi.Update) error {
+func (p *Processor) processMessage(session *session.Session, update *tgbotapi.Update) error {
 	stageRef := session.GetCurrentStage()
 	if stageRef.Empty() {
 		cmd, _ := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
@@ -217,7 +217,7 @@ func (p *GalaxiaProcessor) processMessage(session *session.Session, update *tgbo
 	return p.handleUserUpdate(session, updater)
 }
 
-func (p *GalaxiaProcessor) processCallbackQuery(session *session.Session, update *tgbotapi.Update) error {
+func (p *Processor) processCallbackQuery(session *session.Session, update *tgbotapi.Update) error {
 	callbackHandlerRef, err := session.GetPendingCallbackHandler(update.CallbackQuery.Data)
 	if err != nil {
 		return err
@@ -241,7 +241,7 @@ func (p *GalaxiaProcessor) processCallbackQuery(session *session.Session, update
 
 // user response handler
 
-func (p *GalaxiaProcessor) handleUserUpdate(ses *session.Session, updater model.Updater) error {
+func (p *Processor) handleUserUpdate(ses *session.Session, updater model.Updater) error {
 	if updater == nil {
 		return nil
 	}
@@ -268,7 +268,7 @@ func (p *GalaxiaProcessor) handleUserUpdate(ses *session.Session, updater model.
 
 // callbackID mapper
 
-func (p *GalaxiaProcessor) initStage(ses *session.Session, stg *model.Stage) (*model.Message, error) {
+func (p *Processor) initStage(ses *session.Session, stg *model.Stage) (*model.Message, error) {
 	initMessage, err := stg.Initialize(ses.UserID)
 	if err != nil {
 		return nil, err
@@ -283,7 +283,7 @@ func (p *GalaxiaProcessor) initStage(ses *session.Session, stg *model.Stage) (*m
 	return initMessage, nil
 }
 
-func (p *GalaxiaProcessor) processStage(ses *session.Session, stg *model.Stage, update *tgbotapi.Update) (model.Updater, error) {
+func (p *Processor) processStage(ses *session.Session, stg *model.Stage, update *tgbotapi.Update) (model.Updater, error) {
 	if actionRef, ok := ses.PendingInputs[update.Message.Text]; ok {
 		action, err := p.entityRegistry.GetAction(update.Message.Chat.ID, actionRef)
 		if err != nil {
@@ -307,7 +307,7 @@ func (p *GalaxiaProcessor) processStage(ses *session.Session, stg *model.Stage, 
 
 // callbackID mapper
 
-func (p *GalaxiaProcessor) callbackMapper(ses *session.Session, updater model.Updater) {
+func (p *Processor) callbackMapper(ses *session.Session, updater model.Updater) {
 	messages := updater.GetMessages()
 	for _, message := range messages {
 		if message.InlineKeyboard != nil {
@@ -324,7 +324,7 @@ func (p *GalaxiaProcessor) callbackMapper(ses *session.Session, updater model.Up
 
 // responders by type
 
-func (p *GalaxiaProcessor) respondCallbackQueryResponse(updater model.Updater) error {
+func (p *Processor) respondCallbackQueryResponse(updater model.Updater) error {
 	if updater.GetCallbackResponse() != nil {
 		callBackConfig := utils.TransformCallbackQueryResponse(updater.GetCallbackResponse())
 		_, err := p.api.AnswerCallbackQuery(callBackConfig)
@@ -335,7 +335,7 @@ func (p *GalaxiaProcessor) respondCallbackQueryResponse(updater model.Updater) e
 	return nil
 }
 
-func (p *GalaxiaProcessor) respondMessages(ses *session.Session, updater model.Updater) error {
+func (p *Processor) respondMessages(ses *session.Session, updater model.Updater) error {
 	var chattables []tgbotapi.Chattable
 
 	userID := updater.GetUserID()
@@ -363,7 +363,7 @@ func (p *GalaxiaProcessor) respondMessages(ses *session.Session, updater model.U
 	return nil
 }
 
-func (p *GalaxiaProcessor) respondTransit(messagesSent bool, ses *session.Session, updater model.Updater) error {
+func (p *Processor) respondTransit(messagesSent bool, ses *session.Session, updater model.Updater) error {
 	userID := updater.GetUserID()
 	currentStageName := ses.GetCurrentStage()
 	transitConfig := updater.GetTransitConfig()
