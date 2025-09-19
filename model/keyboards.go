@@ -35,8 +35,9 @@ func (b *ReplyButton) LinkAction(actionRef ResourceRef) *ReplyButton {
 }
 
 type InlineButton struct {
-	Text string
-	Data string
+	Text     string
+	Data     string
+	UserData string
 
 	CallbackBehaviour  CallbackBehaviour
 	CallbackHandlerRef ResourceRef
@@ -50,6 +51,11 @@ func NewInlineButton(name string) *InlineButton {
 
 func (b *InlineButton) LinkCallbackHandler(handlerRef ResourceRef) *InlineButton {
 	b.CallbackHandlerRef = handlerRef
+	return b
+}
+
+func (b *InlineButton) LinkUserData(data string) *InlineButton {
+	b.UserData = data
 	return b
 }
 
@@ -84,4 +90,13 @@ func NewKeyboard[T any](layout KeyboardLayout, buttons ...T) [][]T {
 		}
 	}
 	return keyboard
+}
+
+type MultiPageInlineKeyboard struct {
+	AllButtons         []*InlineButton
+	Offset             int
+	PageLayout         KeyboardLayout
+	CurrentButtons     [][]*InlineButton
+	NextButtonText     string
+	PreviousButtonText string
 }

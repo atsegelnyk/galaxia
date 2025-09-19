@@ -71,8 +71,9 @@ func (CallbackBehaviour) EnumDescriptor() ([]byte, []int) {
 
 type PendingCallback struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	HandlerRef    string                 `protobuf:"bytes,1,opt,name=handler_ref,json=handlerRef,proto3" json:"handler_ref,omitempty"`
-	Behaviour     CallbackBehaviour      `protobuf:"varint,2,opt,name=behaviour,proto3,enum=sessionpb.CallbackBehaviour" json:"behaviour,omitempty"`
+	UserData      string                 `protobuf:"bytes,1,opt,name=user_data,json=userData,proto3" json:"user_data,omitempty"`
+	HandlerRef    string                 `protobuf:"bytes,2,opt,name=handler_ref,json=handlerRef,proto3" json:"handler_ref,omitempty"`
+	Behaviour     CallbackBehaviour      `protobuf:"varint,3,opt,name=behaviour,proto3,enum=sessionpb.CallbackBehaviour" json:"behaviour,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -105,6 +106,13 @@ func (x *PendingCallback) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PendingCallback.ProtoReflect.Descriptor instead.
 func (*PendingCallback) Descriptor() ([]byte, []int) {
 	return file_session_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PendingCallback) GetUserData() string {
+	if x != nil {
+		return x.UserData
+	}
+	return ""
 }
 
 func (x *PendingCallback) GetHandlerRef() string {
@@ -309,11 +317,12 @@ var File_session_proto protoreflect.FileDescriptor
 
 const file_session_proto_rawDesc = "" +
 	"\n" +
-	"\rsession.proto\x12\tsessionpb\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"n\n" +
-	"\x0fPendingCallback\x12\x1f\n" +
-	"\vhandler_ref\x18\x01 \x01(\tR\n" +
+	"\rsession.proto\x12\tsessionpb\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x8b\x01\n" +
+	"\x0fPendingCallback\x12\x1b\n" +
+	"\tuser_data\x18\x01 \x01(\tR\buserData\x12\x1f\n" +
+	"\vhandler_ref\x18\x02 \x01(\tR\n" +
 	"handlerRef\x12:\n" +
-	"\tbehaviour\x18\x02 \x01(\x0e2\x1c.sessionpb.CallbackBehaviourR\tbehaviour\"\xb4\x01\n" +
+	"\tbehaviour\x18\x03 \x01(\x0e2\x1c.sessionpb.CallbackBehaviourR\tbehaviour\"\xb4\x01\n" +
 	"\vUserContext\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x12\n" +

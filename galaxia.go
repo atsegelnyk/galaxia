@@ -3,7 +3,10 @@ package galaxia
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/atsegelnyk/galaxia/auth"
+	"github.com/atsegelnyk/galaxia/metrics"
+	"time"
+
 	"github.com/atsegelnyk/galaxia/entityregistry"
 	"github.com/atsegelnyk/galaxia/model"
 	"github.com/atsegelnyk/galaxia/session"
@@ -21,11 +24,15 @@ type Processor struct {
 
 	sessionRepository session.Repository
 	entityRegistry    *entityregistry.Registry
+	exporter          *metrics.PrometheusExporter
+	auther            auth.Auther
 }
 
 func NewProcessor(opts ...ProcessorOption) *Processor {
 	g := &Processor{
 		entityRegistry: entityregistry.New(),
+		auther:         auth.NewFakeAlwaysAuther(),
+		exporter:       metrics.NewPrometheusExporter(),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -61,12 +68,16 @@ func WithSessionRepository(r session.Repository) ProcessorOption {
 	}
 }
 
-func (p *Processor) RegisterCMD(cmd *model.Command) error {
-	return p.entityRegistry.RegisterCommand(cmd)
+func WithAuther(a auth.Auther) ProcessorOption {
+	return func(g *Processor) {
+		g.auther = a
+	}
 }
 
-func (p *Processor) RegisterStage(stage *model.Stage) error {
-	return p.RegisterStage(stage)
+func WithMetricAddr(addr string) ProcessorOption {
+	return func(g *Processor) {
+		g.exporter.Listen = addr
+	}
 }
 
 func (p *Processor) Start(ctx context.Context) {
@@ -74,6 +85,8 @@ func (p *Processor) Start(ctx context.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	go p.exporter.Serve(ctx)
 	log.Println("start pooling")
 
 	u := tgbotapi.NewUpdate(0)
@@ -89,7 +102,7 @@ func (p *Processor) Start(ctx context.Context) {
 			return
 		case update := <-updates:
 			go func() {
-				err = p.processUpdate(&update)
+				err = p.handleUpdate(&update)
 				if err != nil {
 					log.Println(err)
 				}
@@ -99,15 +112,15 @@ func (p *Processor) Start(ctx context.Context) {
 
 }
 
-func (p *Processor) HandleUserUpdate(updater model.Updater) error {
-	ses, err := p.sessionRepository.Get(updater.GetUserID())
+func (p *Processor) AsyncUpdate(update *model.UserUpdate) error {
+	ses, err := p.sessionRepository.Get(update.UserID)
 	if err != nil {
 		if !errors.Is(err, session.NotFoundError) {
 			return err
 		}
-		ses = session.NewSession(updater.GetUserID())
+		ses = session.NewSession(update.UserID)
 	}
-	return p.handleUserUpdate(ses, updater)
+	return p.processUserUpdate(ses, update)
 }
 
 func (p *Processor) preflightCheck() error {
@@ -136,28 +149,40 @@ func (p *Processor) initSession(update *tgbotapi.Update) *session.Session {
 	)
 }
 
-func (p *Processor) processUpdate(update *tgbotapi.Update) error {
+func (p *Processor) enrichSession(ses *session.Session, update *tgbotapi.Update) {
+	ses.UserContext.Username = update.Message.From.UserName
+	ses.UserContext.Lang = update.Message.From.LanguageCode
+	ses.UserContext.Name = update.Message.From.FirstName
+	ses.UserContext.LastName = update.Message.From.LastName
+}
+
+func (p *Processor) handleUpdate(update *tgbotapi.Update) error {
 	if update.Message != nil {
-		if auther := p.entityRegistry.GetAuther(); auther != nil {
-			err := auther.Authorize(update.Message.Chat.ID)
-			if err != nil {
-				return err
+		err := p.auther.AuthN(update.Message.Chat.ID)
+		if err != nil {
+			if errors.Is(err, auth.UnauthorizedErr) {
+				p.exporter.Increase(metrics.UnauthenticatedRequestsCountMetric)
+				return nil
 			}
+			return err
 		}
 
+		p.exporter.Increase(metrics.UserMessagesSentCountMetric)
 		ses, err := p.sessionRepository.Get(update.Message.Chat.ID)
 		if err != nil {
 			if !errors.Is(err, session.NotFoundError) {
 				return err
 			}
 			ses = p.initSession(update)
-		}
-		ses.AppendStageMessage(int64(update.Message.MessageID))
-		if update.Message.Command() != "" {
-			return p.processCmd(ses, update)
+		} else {
+			p.enrichSession(ses, update)
 		}
 
-		return p.processMessage(ses, update)
+		ses.AppendStageMessages(update.Message.MessageID)
+		if update.Message.Command() != "" {
+			return p.handleCMD(ses, update)
+		}
+		return p.handleMessage(ses, update)
 	}
 
 	if update.CallbackQuery != nil {
@@ -165,14 +190,14 @@ func (p *Processor) processUpdate(update *tgbotapi.Update) error {
 		if err != nil {
 			return err
 		}
-		return p.processCallbackQuery(ses, update)
+		return p.handleCallbackQuery(ses, update)
 	}
 	return nil
 }
 
 // event processors by type
 
-func (p *Processor) processCmd(session *session.Session, update *tgbotapi.Update) error {
+func (p *Processor) handleCMD(session *session.Session, update *tgbotapi.Update) error {
 	cmd, err := p.entityRegistry.GetCommand(update.Message.Chat.ID, model.ResourceRef(update.Message.Command()))
 	if err != nil {
 		return err
@@ -185,23 +210,37 @@ func (p *Processor) processCmd(session *session.Session, update *tgbotapi.Update
 		return err
 	}
 
-	updater := action.Func()(session.UserContext, update)
-	return p.handleUserUpdate(session, updater)
+	p.exporter.IncreaseWithLabels(metrics.CmdExecutedCountMetric, map[string]string{
+		metrics.CmdRefLabel: string(cmd.SelfRef()),
+	})
+	start := time.Now()
+	userUpdate := action.Func()(session.UserContext, update)
+	p.exporter.ObserveWithLabels(metrics.RequestDurationBucketMetric, time.Since(start), map[string]string{
+		metrics.ActionRefLabel: string(action.SelfRef()),
+	})
+	return p.processUserUpdate(session, userUpdate)
 }
 
-func (p *Processor) processMessage(session *session.Session, update *tgbotapi.Update) error {
+func (p *Processor) handleMessage(session *session.Session, update *tgbotapi.Update) error {
 	stageRef := session.GetCurrentStage()
 	if stageRef.Empty() {
-		cmd, _ := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
+		startCmd, _ := p.entityRegistry.GetCommand(update.Message.Chat.ID, StartCMDName)
 		action, err := p.entityRegistry.GetAction(
 			update.Message.Chat.ID,
-			cmd.ActionRef(),
+			startCmd.ActionRef(),
 		)
 		if err != nil {
 			return err
 		}
-		response := action.Func()(session.UserContext, update)
-		return p.handleUserUpdate(session, response)
+		p.exporter.IncreaseWithLabels(metrics.CmdExecutedCountMetric, map[string]string{
+			metrics.CmdRefLabel: string(startCmd.SelfRef()),
+		})
+		start := time.Now()
+		userUpdate := action.Func()(session.UserContext, update)
+		p.exporter.ObserveWithLabels(metrics.RequestDurationBucketMetric, time.Since(start), map[string]string{
+			metrics.ActionRefLabel: string(action.SelfRef()),
+		})
+		return p.processUserUpdate(session, userUpdate)
 	}
 
 	stg, err := p.entityRegistry.GetStage(update.Message.Chat.ID, stageRef)
@@ -209,21 +248,59 @@ func (p *Processor) processMessage(session *session.Session, update *tgbotapi.Up
 		return err
 	}
 
-	updater, err := p.processStage(session, stg, update)
+	userUpdate, err := p.handleStage(session, stg, update)
 	if err != nil {
 		return err
 	}
 
-	return p.handleUserUpdate(session, updater)
+	return p.processUserUpdate(session, userUpdate)
 }
 
-func (p *Processor) processCallbackQuery(session *session.Session, update *tgbotapi.Update) error {
-	callbackHandlerRef, err := session.GetPendingCallbackHandler(update.CallbackQuery.Data)
+func (p *Processor) handleStage(ses *session.Session, stg *model.Stage, update *tgbotapi.Update) (*model.UserUpdate, error) {
+	if actionRef, ok := ses.PendingInputs[update.Message.Text]; ok {
+		action, err := p.entityRegistry.GetAction(update.Message.Chat.ID, actionRef)
+		if err != nil {
+			return nil, err
+		}
+		p.exporter.IncreaseWithLabels(metrics.StageActionProcessedCountMetric, map[string]string{
+			metrics.StageRefLabel:  string(stg.SelfRef()),
+			metrics.ActionRefLabel: string(actionRef),
+		})
+		start := time.Now()
+		userUpdate := action.Func()(ses.UserContext, update)
+		p.exporter.ObserveWithLabels(metrics.RequestDurationBucketMetric, time.Since(start), map[string]string{
+			metrics.ActionRefLabel: string(action.SelfRef()),
+		})
+		return userUpdate, nil
+	}
+
+	if stg.CustomInputAllowed() {
+		defActionRef := stg.DefaultActionRef()
+		defAction, err := p.entityRegistry.GetAction(update.Message.Chat.ID, defActionRef)
+		if err != nil {
+			return nil, err
+		}
+		p.exporter.IncreaseWithLabels(metrics.StageActionProcessedCountMetric, map[string]string{
+			metrics.StageRefLabel:  string(stg.SelfRef()),
+			metrics.ActionRefLabel: string(defActionRef),
+		})
+		start := time.Now()
+		userUpdate := defAction.Func()(ses.UserContext, update)
+		p.exporter.ObserveWithLabels(metrics.RequestDurationBucketMetric, time.Since(start), map[string]string{
+			metrics.ActionRefLabel: string(defActionRef),
+		})
+		return userUpdate, nil
+	}
+	return nil, model.UnrecognizedInputError
+}
+
+func (p *Processor) handleCallbackQuery(ses *session.Session, update *tgbotapi.Update) error {
+	pendingCallbak, err := ses.GetPendingCallback(update.CallbackQuery.Data)
 	if err != nil {
 		return err
 	}
 
-	callbackHandler, err := p.entityRegistry.GetCallbackHandler(int64(update.CallbackQuery.From.ID), callbackHandlerRef)
+	callbackHandler, err := p.entityRegistry.GetCallbackHandler(int64(update.CallbackQuery.From.ID), pendingCallbak.HandlerRef)
 	if err != nil {
 		return err
 	}
@@ -235,191 +312,156 @@ func (p *Processor) processCallbackQuery(session *session.Session, update *tgbot
 		return err
 	}
 
-	updater := action.Func()(session.UserContext, update)
-	return p.handleUserUpdate(session, updater)
+	ses.UserContext.CallbackData = &pendingCallbak.UserData
+	p.exporter.IncreaseWithLabels(metrics.CallbacksProcessedCountMetric, map[string]string{
+		metrics.CallbackHandlerRefLabel: string(callbackHandler.SelfRef()),
+	})
+	start := time.Now()
+	userUpdate := action.Func()(ses.UserContext, update)
+	p.exporter.ObserveWithLabels(metrics.RequestDurationBucketMetric, time.Since(start), map[string]string{
+		metrics.ActionRefLabel: string(action.SelfRef()),
+	})
+	return p.processUserUpdate(ses, userUpdate)
 }
 
-// user response handler
+// user response handlerx
 
-func (p *Processor) handleUserUpdate(ses *session.Session, updater model.Updater) error {
-	if updater == nil {
-		return nil
-	}
-	messagesSent := false
-
-	if updater.GetCallbackResponse() != nil {
-		err := p.respondCallbackQueryResponse(updater)
-		if err != nil {
-			log.Println(err)
-		}
+func (p *Processor) processUserUpdate(ses *session.Session, update *model.UserUpdate) error {
+	stageReInit := false
+	if update.Messages != nil {
+		p.callbackMapper(ses, update)
+		stageReInit = true
 	}
 
-	if updater.GetMessages() != nil {
-		p.callbackMapper(ses, updater)
-		err := p.respondMessages(ses, updater)
-		messagesSent = true
-		if err != nil {
-			log.Println(err)
-		}
-	}
-
-	return p.respondTransit(messagesSent, ses, updater)
-}
-
-// callbackID mapper
-
-func (p *Processor) initStage(ses *session.Session, stg *model.Stage) (*model.Message, error) {
-	initMessage, err := stg.Initialize(ses.UserID)
+	err := p.processTransit(stageReInit, ses, update)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if initMessage != nil {
-		for _, row := range initMessage.ReplyKeyboard {
-			for _, button := range row {
-				ses.PendingInputs[button.Text] = button.ActionRef
-			}
-		}
+	sentMessages, err := p.respond(update)
+	ses.AppendStageMessages(sentMessages...)
+	if err != nil {
+		return err
 	}
-	return initMessage, nil
-}
-
-func (p *Processor) processStage(ses *session.Session, stg *model.Stage, update *tgbotapi.Update) (model.Updater, error) {
-	if actionRef, ok := ses.PendingInputs[update.Message.Text]; ok {
-		action, err := p.entityRegistry.GetAction(update.Message.Chat.ID, actionRef)
-		if err != nil {
-			return nil, err
-		}
-		updater := action.Func()(ses.UserContext, update)
-		return updater, nil
-	}
-
-	if stg.CustomInputAllowed() {
-		defActionRef := stg.DefaultActionRef()
-		defAction, err := p.entityRegistry.GetAction(update.Message.Chat.ID, defActionRef)
-		if err != nil {
-			return nil, err
-		}
-		updater := defAction.Func()(ses.UserContext, update)
-		return updater, nil
-	}
-	return nil, model.UnrecognizedInputError
+	ses.UserContext.CallbackData = nil
+	return p.sessionRepository.Save(ses)
 }
 
 // callbackID mapper
 
-func (p *Processor) callbackMapper(ses *session.Session, updater model.Updater) {
-	messages := updater.GetMessages()
-	for _, message := range messages {
+func (p *Processor) callbackMapper(ses *session.Session, update *model.UserUpdate) {
+	for _, message := range update.Messages {
 		if message.InlineKeyboard != nil {
 			for _, row := range message.InlineKeyboard {
 				for _, button := range row {
 					callbackID := utils.GenerateCallbackID()
 					button.Data = callbackID
-					ses.RegisterCallback(callbackID, button.CallbackBehaviour, button.CallbackHandlerRef)
+					ses.RegisterCallback(callbackID,
+						button.CallbackBehaviour,
+						button.UserData,
+						button.CallbackHandlerRef,
+					)
 				}
 			}
 		}
 	}
 }
 
-// responders by type
+func (p *Processor) processTransit(stageReInit bool, ses *session.Session, update *model.UserUpdate) error {
+	currentStageRef := ses.GetCurrentStage()
 
-func (p *Processor) respondCallbackQueryResponse(updater model.Updater) error {
-	if updater.GetCallbackResponse() != nil {
-		callBackConfig := utils.TransformCallbackQueryResponse(updater.GetCallbackResponse())
-		_, err := p.api.AnswerCallbackQuery(callBackConfig)
+	if update.Transit != nil {
+		next, err := p.entityRegistry.GetStage(update.UserID, update.Transit.TargetRef)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
 
-func (p *Processor) respondMessages(ses *session.Session, updater model.Updater) error {
-	var chattables []tgbotapi.Chattable
-
-	userID := updater.GetUserID()
-	messages := updater.GetMessages()
-
-	for _, msg := range messages {
-		if msg.Photo != nil {
-			photoConfig := utils.TransformPhoto(userID, msg.Photo)
-			chattables = append(chattables, photoConfig)
-		}
-		if msg.Video != nil {
-			videoConfig := utils.TransformVideo(userID, msg.Video)
-			chattables = append(chattables, videoConfig)
-		}
-		mcgConfig := utils.TransformMessage(userID, msg)
-		chattables = append(chattables, mcgConfig)
-	}
-	for _, c := range chattables {
-		sentMsg, err := p.api.Send(c)
-		if err != nil {
-			return err
-		}
-		ses.AppendStageMessage(int64(sentMsg.MessageID))
-	}
-	return nil
-}
-
-func (p *Processor) respondTransit(messagesSent bool, ses *session.Session, updater model.Updater) error {
-	userID := updater.GetUserID()
-	currentStageName := ses.GetCurrentStage()
-	transitConfig := updater.GetTransitConfig()
-
-	var chattables []tgbotapi.Chattable
-	var deletees []int64
-
-	if transitConfig != nil {
-		next, err := p.entityRegistry.GetStage(userID, transitConfig.TargetRef)
-		if err != nil {
-			return err
-		}
 		ses.SetNextStage(next.SelfRef())
-
-		ses.PendingInputs = make(map[string]model.ResourceRef)
-
-		initializer, err := p.initStage(ses, next)
+		initialMessages, err := p.initStage(ses, next)
 		if err != nil {
 			return err
 		}
-
-		msgConfig := utils.TransformMessage(userID, initializer)
-		chattables = append(chattables, msgConfig)
-
-		if transitConfig.Clean {
-			deletees = append(deletees, ses.StageMessages...)
+		update.Messages = append(update.Messages, initialMessages...)
+		if update.Transit.Clean {
+			update.ToDeleteMessages = append(update.ToDeleteMessages, ses.StageMessages...)
 			ses.Clean()
 		}
 
-	} else if currentStageName != "" && messagesSent {
-		currentStage, err := p.entityRegistry.GetStage(userID, currentStageName)
+		p.exporter.IncreaseWithLabels(metrics.StageReachedCountMetric, map[string]string{
+			metrics.StageRefLabel: string(next.SelfRef()),
+		})
+	} else if !currentStageRef.Empty() && stageReInit {
+		currentStage, err := p.entityRegistry.GetStage(update.UserID, currentStageRef)
 		if err != nil {
 			return err
 		}
-		initializer, err := currentStage.Initializer().Get(userID)
+		initialMessages, err := currentStage.Initializer().Init(update.UserID, currentStageRef)
 		if err != nil {
 			return err
 		}
+		update.Messages = append(update.Messages, initialMessages...)
+	}
+	return nil
+}
 
-		msgConfig := utils.TransformMessage(userID, initializer)
-		chattables = append(chattables, msgConfig)
+func (p *Processor) initStage(ses *session.Session, stg *model.Stage) ([]*model.Message, error) {
+	ses.PendingInputs = make(map[string]model.ResourceRef)
+	initMessages, err := stg.Initialize(ses.UserID, stg.SelfRef())
+	if err != nil {
+		return nil, err
 	}
 
-	for _, msg := range chattables {
-		sentMsg, err := p.api.Send(msg)
-		if err != nil {
-			return err
+	last := initMessages[len(initMessages)-1]
+	if initMessages[len(initMessages)-1] != nil {
+		for _, row := range last.ReplyKeyboard {
+			for _, button := range row {
+				ses.PendingInputs[button.Text] = button.ActionRef
+			}
 		}
-		ses.AppendStageMessage(int64(sentMsg.MessageID))
 	}
 
-	for _, ID := range deletees {
-		_, err := p.api.DeleteMessage(tgbotapi.NewDeleteMessage(ses.UserID, int(ID)))
+	return initMessages, nil
+}
+
+func (p *Processor) respond(update *model.UserUpdate) ([]int, error) {
+	var sentMessages []int
+
+	if update.CallbackQueryResponse != nil {
+		callBackConfig := utils.TransformCallbackQueryResponse(update.CallbackQueryResponse)
+		_, err := p.api.AnswerCallbackQuery(callBackConfig)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 	}
-	return p.sessionRepository.Save(ses)
+
+	for _, msg := range update.Messages {
+		var chattables []tgbotapi.Chattable
+
+		if msg.Photo != nil {
+			photoConfig := utils.TransformPhoto(update.UserID, msg.Photo)
+			chattables = append(chattables, photoConfig)
+		}
+		if msg.Video != nil {
+			videoConfig := utils.TransformVideo(update.UserID, msg.Video)
+			chattables = append(chattables, videoConfig)
+		}
+		mcgConfig := utils.TransformMessage(update.UserID, msg)
+		chattables = append(chattables, mcgConfig)
+
+		for _, c := range chattables {
+			sent, err := p.api.Send(c)
+			if err != nil {
+				return sentMessages, err
+			}
+			p.exporter.Increase(metrics.BotMessagesSentCountMetric)
+			sentMessages = append(sentMessages, sent.MessageID)
+		}
+	}
+
+	for _, ID := range update.ToDeleteMessages {
+		_, err := p.api.DeleteMessage(tgbotapi.NewDeleteMessage(update.UserID, ID))
+		if err != nil {
+			return sentMessages, err
+		}
+	}
+	return sentMessages, nil
 }

@@ -14,8 +14,9 @@ enum CallbackBehaviour {
 }
 
 message PendingCallback {
-  string handler_ref = 1;
-  CallbackBehaviour behaviour = 2;
+  string user_data = 1;
+  string handler_ref = 2;
+  CallbackBehaviour behaviour = 3;
 }
 
 message UserContext {

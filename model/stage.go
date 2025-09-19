@@ -83,25 +83,25 @@ func (s *Stage) CustomInputAllowed() bool {
 	return s.customInputAllowed
 }
 
-func (s *Stage) Initialize(userID int64) (*Message, error) {
-	return s.initializer.Get(userID)
+func (s *Stage) Initialize(userID int64, stage ResourceRef) ([]*Message, error) {
+	return s.initializer.Init(userID, stage)
 }
 
 // StageInitializer represents initializer interface
 type StageInitializer interface {
-	Get(userId int64) (*Message, error)
+	Init(userId int64, stage ResourceRef) ([]*Message, error)
 }
 
 type StaticStageInitializer struct {
-	Message *Message
+	Messages []*Message
 }
 
-func NewStaticStageInitializer(msg *Message) *StaticStageInitializer {
+func NewStaticStageInitializer(msgs ...*Message) *StaticStageInitializer {
 	return &StaticStageInitializer{
-		Message: msg,
+		Messages: msgs,
 	}
 }
 
-func (s *StaticStageInitializer) Get(_ int64) (*Message, error) {
-	return s.Message, nil
+func (s *StaticStageInitializer) Init(_ int64, _ ResourceRef) ([]*Message, error) {
+	return s.Messages, nil
 }

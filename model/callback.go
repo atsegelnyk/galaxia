@@ -1,8 +1,9 @@
 package model
 
 type PendingCallback struct {
-	HandlerRef ResourceRef       `json:"handler_ref"`
-	Behaviour  CallbackBehaviour `json:"behaviour"`
+	UserData   string            `json:"userData,omitempty"`
+	HandlerRef ResourceRef       `json:"handler_ref" json:"handlerRef,omitempty"`
+	Behaviour  CallbackBehaviour `json:"behaviour" json:"behaviour,omitempty"`
 }
 
 type CallbackHandler struct {

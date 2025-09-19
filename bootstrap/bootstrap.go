@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/atsegelnyk/galaxia/auth"
 	"github.com/atsegelnyk/galaxia/entityregistry"
 	"github.com/atsegelnyk/galaxia/model"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -18,10 +17,6 @@ func FromFile(path string) (*entityregistry.Registry, error) {
 		return nil, err
 	}
 	er := entityregistry.New()
-
-	er.RegisterAuther(
-		bootstrapAuther(schema.Auther),
-	)
 
 	for _, act := range schema.Actions {
 		err = bootstrapAction(act, er)
@@ -73,7 +68,7 @@ func readConfigFromFile(path string) (*BotSchema, error) {
 }
 
 func bootstrapAction(actionSchema ActionSchema, er *entityregistry.Registry) error {
-	action := model.NewAction(actionSchema.Name, func(ctx *model.UserContext, update *tgbotapi.Update) model.Updater {
+	action := model.NewAction(actionSchema.Name, func(ctx *model.UserContext, update *tgbotapi.Update) *model.UserUpdate {
 
 		msgText, err := executeUserTemplate(actionSchema.Message, ctx)
 		var message *model.Message
@@ -179,14 +174,4 @@ func executeUserTemplate(tplText string, data interface{}) (string, error) {
 		return "", err
 	}
 	return msgBuf.String(), nil
-}
-
-func bootstrapAuther(autherSchema *AutherSchema) auth.Auther {
-	if autherSchema.Blacklist != nil {
-		return auth.NewBlacklistAuther(autherSchema.Blacklist)
-	}
-	if autherSchema.Whitelist != nil {
-		return auth.NewWhiteListAuther(autherSchema.Whitelist)
-	}
-	return nil
 }

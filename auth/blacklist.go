@@ -4,13 +4,13 @@ type BlacklistAuther struct {
 	blacklist []int64
 }
 
-func NewBlacklistAuther(blacklist []int64) *BlacklistAuther {
+func NewBlacklistAuther(blacklist ...int64) *BlacklistAuther {
 	return &BlacklistAuther{
 		blacklist: blacklist,
 	}
 }
 
-func (b BlacklistAuther) Authorize(userID int64) error {
+func (b BlacklistAuther) AuthN(userID int64) error {
 	for _, v := range b.blacklist {
 		if userID == v {
 			return UnauthorizedErr

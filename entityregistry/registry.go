@@ -2,7 +2,6 @@ package entityregistry
 
 import (
 	"fmt"
-	"github.com/atsegelnyk/galaxia/auth"
 	"github.com/atsegelnyk/galaxia/model"
 	"sync"
 )
@@ -10,7 +9,6 @@ import (
 type Registry struct {
 	mu sync.Mutex
 
-	auther           auth.Auther
 	actions          map[model.ResourceRef]*model.Action
 	cmds             map[model.ResourceRef]*model.Command
 	stages           map[model.ResourceRef]*model.Stage
@@ -36,14 +34,6 @@ func New() *Registry {
 		overrides:        make(map[int64]userOverrides),
 	}
 	return entityRegistry
-}
-
-func (r *Registry) RegisterAuther(auther auth.Auther) {
-	r.auther = auther
-}
-
-func (r *Registry) GetAuther() auth.Auther {
-	return r.auther
 }
 
 func (r *Registry) RegisterCommand(cmd *model.Command) error {

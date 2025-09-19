@@ -21,6 +21,15 @@ func TransformVideo(userID int64, video []byte) tgbotapi.VideoConfig {
 	return tgbotapi.NewVideoUpload(userID, photoFileBytes)
 }
 
+func TransformMessages(userID int64, models []*model.Message) []tgbotapi.Chattable {
+	var cbs []tgbotapi.Chattable
+	for _, m := range models {
+		cfg := TransformMessage(userID, m)
+		cbs = append(cbs, cfg)
+	}
+	return cbs
+}
+
 func TransformMessage(userID int64, model *model.Message) *tgbotapi.MessageConfig {
 	messageConfig := tgbotapi.NewMessage(userID, model.Text)
 	if model.InlineKeyboard != nil {

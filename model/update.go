@@ -1,12 +1,5 @@
 package model
 
-type Updater interface {
-	GetUserID() int64
-	GetTransitConfig() *Transit
-	GetMessages() []*Message
-	GetCallbackResponse() *CallbackQueryResponse
-}
-
 type UserUpdateOption func(*UserUpdate)
 
 type UserUpdate struct {
@@ -14,6 +7,7 @@ type UserUpdate struct {
 	Transit               *Transit
 	Messages              []*Message
 	CallbackQueryResponse *CallbackQueryResponse
+	ToDeleteMessages      []int
 }
 
 func NewUserUpdate(userID int64, options ...UserUpdateOption) *UserUpdate {
@@ -49,6 +43,12 @@ func WithCallbackQueryResponse(callbackQueryResponse *CallbackQueryResponse) Use
 	}
 }
 
+func WithToDeleteMessages(toDeleteMessages []int) UserUpdateOption {
+	return func(response *UserUpdate) {
+		response.ToDeleteMessages = toDeleteMessages
+	}
+}
+
 type CallbackQueryResponse struct {
 	Text            string
 	CallbackQueryID string
@@ -57,20 +57,4 @@ type CallbackQueryResponse struct {
 type Transit struct {
 	Clean     bool
 	TargetRef ResourceRef
-}
-
-func (u *UserUpdate) GetUserID() int64 {
-	return u.UserID
-}
-
-func (u *UserUpdate) GetTransitConfig() *Transit {
-	return u.Transit
-}
-
-func (u *UserUpdate) GetMessages() []*Message {
-	return u.Messages
-}
-
-func (u *UserUpdate) GetCallbackResponse() *CallbackQueryResponse {
-	return u.CallbackQueryResponse
 }

@@ -2,7 +2,7 @@ package model
 
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 
-type UserActionFunc func(ctx *UserContext, update *tgbotapi.Update) Updater
+type UserActionFunc func(ctx *UserContext, update *tgbotapi.Update) *UserUpdate
 
 type Action struct {
 	name string

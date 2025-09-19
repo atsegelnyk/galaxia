@@ -4,13 +4,13 @@ type WhitelistAuther struct {
 	whitelist []int64
 }
 
-func NewWhiteListAuther(whitelist []int64) *WhitelistAuther {
+func NewWhiteListAuther(whitelist ...int64) *WhitelistAuther {
 	return &WhitelistAuther{
 		whitelist: whitelist,
 	}
 }
 
-func (w WhitelistAuther) Authorize(userID int64) error {
+func (w WhitelistAuther) AuthN(userID int64) error {
 	for _, v := range w.whitelist {
 		if userID == v {
 			return nil

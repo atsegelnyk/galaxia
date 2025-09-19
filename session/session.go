@@ -21,7 +21,7 @@ type Session struct {
 	UserContext      *model.UserContext                `json:"context"`
 	PendingCallbacks map[string]*model.PendingCallback `json:"pending_callbacks"`
 	PendingInputs    map[string]model.ResourceRef      `json:"pending_inputs"`
-	StageMessages    []int64                           `json:"pending_messages"`
+	StageMessages    []int                             `json:"pending_messages"`
 }
 
 func NewSession(userID int64, opts ...Option) *Session {
@@ -82,26 +82,26 @@ func (s *Session) SetNextStage(nextStageRef model.ResourceRef) {
 	s.CurrentStage = nextStageRef
 }
 
-func (s *Session) RegisterCallback(id string, behaviour model.CallbackBehaviour, handlerRef model.ResourceRef) {
+func (s *Session) RegisterCallback(id string, behaviour model.CallbackBehaviour, userData string, handlerRef model.ResourceRef) {
 	s.PendingCallbacks[id] = &model.PendingCallback{
 		Behaviour:  behaviour,
+		UserData:   userData,
 		HandlerRef: handlerRef,
 	}
 }
 
-func (s *Session) GetPendingCallbackHandler(callbackID string) (model.ResourceRef, error) {
+func (s *Session) GetPendingCallback(callbackID string) (*model.PendingCallback, error) {
 	if cb, ok := s.PendingCallbacks[callbackID]; ok {
-		ref := cb.HandlerRef
 		if cb.Behaviour == model.DeleteCallbackBehaviour {
 			delete(s.PendingCallbacks, callbackID)
 		}
-		return ref, nil
+		return cb, nil
 	}
-	return "", errors.New("callback not found")
+	return nil, errors.New("callback not found")
 }
 
-func (s *Session) AppendStageMessage(msgID int64) {
-	s.StageMessages = append(s.StageMessages, msgID)
+func (s *Session) AppendStageMessages(msgIDs ...int) {
+	s.StageMessages = append(s.StageMessages, msgIDs...)
 }
 
 func (s *Session) Clean() {
@@ -144,6 +144,7 @@ func (s *Session) MarshalProto() ([]byte, error) {
 			continue
 		}
 		pbCbs[k] = &sessionpb.PendingCallback{
+			UserData:   v.UserData,
 			HandlerRef: string(v.HandlerRef),
 			Behaviour:  sessionpb.CallbackBehaviour(v.Behaviour),
 		}
@@ -157,6 +158,11 @@ func (s *Session) MarshalProto() ([]byte, error) {
 		pInputs[k] = string(v)
 	}
 
+	var pStageMessages []int64
+	for _, msg := range s.StageMessages {
+		pStageMessages = append(pStageMessages, int64(msg))
+	}
+
 	return proto.Marshal(&sessionpb.Session{
 		ExpireTime:       timestamppb.New(s.ExpireTime),
 		Ttl:              s.TTL,
@@ -165,7 +171,7 @@ func (s *Session) MarshalProto() ([]byte, error) {
 		Context:          pbCtx,
 		PendingCallbacks: pbCbs,
 		PendingInputs:    pInputs,
-		StageMessages:    s.StageMessages,
+		StageMessages:    pStageMessages,
 	})
 }
 
@@ -206,6 +212,7 @@ func (s *Session) UnmarshalProto(data []byte) error {
 		s.PendingCallbacks = make(map[string]*model.PendingCallback, len(ps.PendingCallbacks))
 		for k, v := range ps.PendingCallbacks {
 			s.PendingCallbacks[k] = &model.PendingCallback{
+				UserData:   v.UserData,
 				HandlerRef: model.ResourceRef(v.HandlerRef),
 				Behaviour:  model.CallbackBehaviour(v.Behaviour),
 			}
@@ -223,6 +230,8 @@ func (s *Session) UnmarshalProto(data []byte) error {
 		s.PendingInputs = make(map[string]model.ResourceRef)
 	}
 
-	s.StageMessages = ps.StageMessages
+	for _, msg := range ps.StageMessages {
+		s.StageMessages = append(s.StageMessages, int(msg))
+	}
 	return nil
 }
